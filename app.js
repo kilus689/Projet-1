@@ -763,15 +763,6 @@ function showView() {
 window.addEventListener('hashchange', showView);
 showView();
 
-// Petites têtes des mascottes (sprites PokéAPI), avec une image de secours.
-document.querySelectorAll('.mascot').forEach((img) => {
-  const base = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
-  const sources = [`${base}/versions/generation-viii/icons/${img.dataset.dex}.png`, `${base}/${img.dataset.dex}.png`];
-  let i = 0;
-  img.onerror = () => { if (++i < sources.length) img.src = sources[i]; else img.hidden = true; };
-  img.src = sources[0];
-});
-
 /* ---------- Branchements ---------- */
 
 window.addEventListener('error', (e) => setStatus('Erreur : ' + e.message, true));
