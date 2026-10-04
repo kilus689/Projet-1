@@ -103,14 +103,30 @@ function updateMode() {
 
 // Charge la photo, la réduit, puis retire le fond uni autour de la carte.
 async function fileToCanvas(file) {
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+  const img = await loadImage(file);
+  const scale = Math.min(1, 2000 / Math.max(img.width, img.height));
   const c = document.createElement('canvas');
-  c.width = Math.round(bitmap.width * scale);
-  c.height = Math.round(bitmap.height * scale);
-  c.getContext('2d').drawImage(bitmap, 0, 0, c.width, c.height);
-  bitmap.close?.();
+  c.width = Math.round(img.width * scale);
+  c.height = Math.round(img.height * scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  img.close?.();
   return trimBackground(c);
+}
+
+// Safari ne gère pas toujours createImageBitmap : on passe alors par une balise <img>.
+async function loadImage(file) {
+  try {
+    return await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch { /* repli ci-dessous */ }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return img;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 // Repère le fond à partir des coins de l'image et coupe les bandes qui lui ressemblent.
@@ -144,6 +160,7 @@ function trimBackground(src) {
 }
 
 async function onPhoto(side, file) {
+  setStatus('Photo reçue, préparation…');
   try {
     photos[side] = await fileToCanvas(file);
   } catch (err) {
@@ -293,7 +310,7 @@ function cleanName(raw, lang) {
       .map((l) => l.replace(JA_STAGE_WORDS, ' ').replace(new RegExp(`[^${JA_CHARS}A-Za-z ]`, 'g'), ' ')
         .replace(/\s+/g, ' ').trim()
         // Tesseract met souvent des espaces entre les caractères japonais.
-        .replace(new RegExp(`(?<=[${JA_CHARS}]) (?=[${JA_CHARS}])`, 'g'), ''))
+        .replace(new RegExp(`([${JA_CHARS}]) (?=[${JA_CHARS}])`, 'g'), '$1'))
       .filter((l) => new RegExp(`[${JA_CHARS}]{2,}`).test(l));
     lines.sort((a, b) => b.length - a.length);
     return lines[0] || '';
@@ -542,6 +559,9 @@ function renderCard(card, isBest) {
 }
 
 /* ---------- Branchements ---------- */
+
+window.addEventListener('error', (e) => setStatus('Erreur : ' + e.message, true));
+window.addEventListener('unhandledrejection', (e) => setStatus('Erreur : ' + (e.reason?.message || e.reason), true));
 
 document.querySelectorAll('.slot input[type=file]').forEach((input) => {
   input.addEventListener('change', () => {
