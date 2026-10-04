@@ -35,6 +35,7 @@ const photos = { front: null, back: null }; // canvas recadrés
 const ocrWorkers = {};
 const setsCache = {};
 let shown = [];        // cartes affichées, pour recalculer quand l'état change
+let missingBox = null; // encadré « carte absente de la base »
 let englishName = '';  // nom anglais (cartes japonaises), pour le lien Cardmarket
 let setCode = '';      // code d'extension lu sur la carte (ex : SV8a)
 
@@ -532,26 +533,30 @@ async function findCandidates(lang, name, num, total) {
     queries.push(name);
     const longest = name.split(' ').sort((a, b) => b.length - a.length)[0];
     if (longest && longest.length >= 3 && longest !== name) queries.push(longest);
+    // Nom japonais mal lu (ex : « ニンフィ太らン ») : on cherche avec le début du nom.
+    const ja = (name.match(new RegExp(`[${JA_CHARS}]+`)) || [''])[0];
+    for (const len of [ja.length - 1, 4, 3]) {
+      if (len >= 2 && len < ja.length) queries.push(ja.slice(0, len));
+    }
   }
-  for (const q of queries) {
+  for (const q of [...new Set(queries)]) {
     add(await getJson(`${API}/${lang}/cards?name=${encodeURIComponent(q)}`));
     if (found.size) break;
   }
-  // Pas de nom exploitable : recherche par numéro.
-  if (!found.size && num) {
-    add(await getJson(`${API}/${lang}/cards?localId=${encodeURIComponent(num)}`));
-  }
+  // Le numéro aide toujours : on ajoute les cartes portant ce numéro.
+  if (num) add(await getJson(`${API}/${lang}/cards?localId=${encodeURIComponent(num)}`));
 
   const sets = await getSets(lang);
   const scored = [...found.values()].map((c) => {
     const setId = setIdOf(c.id);
     const set = sets[setId];
     const localNum = parseInt(c.localId, 10);
-    let score = name ? similarity(name, c.name) * 50 : 0;
+    const sim = name ? similarity(name, c.name) : 0;
+    let score = sim * 50;
     if (num && localNum === num) score += 40;
     if (total && set?.cardCount?.official === total) score += 25;
     if (setCode && compact(setCode) === compact(setId)) score += 20;
-    return { brief: c, score };
+    return { brief: c, score, sim };
   });
   scored.sort((a, b) => b.score - a.score);
   return scored;
@@ -578,6 +583,7 @@ async function search() {
   setStatus('Recherche de la carte et de son prix…');
   els.results.innerHTML = '';
   shown = [];
+  missingBox = null;
   try {
     let candidates = [], lang = langs[0];
     for (const l of langs) {
@@ -599,23 +605,68 @@ async function search() {
     }
     if (chosen === 'auto') els.lang.value = lang;
 
-    const top = candidates.slice(0, 6);
-    const details = await Promise.all(top.map((c) =>
-      getJson(`${API}/${lang}/cards/${encodeURIComponent(c.brief.id)}`).catch(() => null)));
+    // Carte introuvable : on montre seulement les autres versions du même Pokémon.
+    const list = sure ? candidates : candidates.filter((c) => c.sim >= 0.5);
+    const top = list.slice(0, 6);
+    const details = (await Promise.all(top.map((c) =>
+      getJson(`${API}/${lang}/cards/${encodeURIComponent(c.brief.id)}`).catch(() => null))));
 
-    shown = top.map((c, i) => ({ card: details[i], best: i === 0 && c.score >= 60 })).filter((x) => x.card);
+    const ref = details.find(Boolean);
+    const names = ref ? await speciesNames(ref, name) : null;
+    if (names?.en && JA_RE.test(ref.name) && !englishName) englishName = names.en;
+
+    shown = top.map((c, i) => ({ card: details[i], best: sure && i === 0 })).filter((x) => x.card);
     renderResults();
-    const extra = candidates.length > top.length ? ` (${candidates.length} correspondances, les plus probables en premier)` : '';
-    setStatus(sure
-      ? `Résultats${extra}.`
-      : "Pas de correspondance sûre : voici les cartes les plus proches. La carte est peut-être trop récente pour la base de prix, vérifie aussi sur Cardmarket.");
+    if (sure) {
+      const extra = candidates.length > top.length ? ` (${candidates.length} correspondances, les plus probables en premier)` : '';
+      setStatus(`Résultats${extra}.`);
+    } else {
+      setStatus('');
+      missingBox = renderMissing(names, num, total, shown.length > 0);
+      renderResults();
+    }
   } catch (err) {
     setStatus('Erreur lors de la recherche : ' + err.message, true);
   }
 }
 
+// Noms français et anglais du Pokémon (via son numéro de Pokédex), pour Cardmarket.
+async function speciesNames(card, typedName) {
+  const dex = Array.isArray(card.dexId) ? card.dexId[0] : card.dexId;
+  if (!dex) return null;
+  try {
+    const sp = await getJson(`https://pokeapi.co/api/v2/pokemon-species/${dex}`);
+    const pick = (l) => sp?.names?.find((n) => n.language?.name === l)?.name;
+    const suffix = ((typedName || card.name).match(/\s*(ex|EX|GX|VMAX|VSTAR|V)$/) || [''])[0].trim();
+    const add = (n) => (n && suffix ? `${n} ${suffix}` : n);
+    return { en: add(pick('en')), fr: add(pick('fr')) };
+  } catch {
+    return null;
+  }
+}
+
+function renderMissing(names, num, total, hasOthers) {
+  const label = names?.fr || names?.en || els.name.value.trim() || 'Cette carte';
+  const number = num ? ` · n° ${String(num).padStart(String(total || '').length, '0')}${total ? '/' + total : ''}` : '';
+  const query = names?.en || englishName || els.name.value.trim();
+  const el = document.createElement('article');
+  el.className = 'result missing';
+  el.innerHTML = `
+    <div class="info">
+      <h3>${escapeHtml(label)}${escapeHtml(number)}</h3>
+      <p>Cette carte précise n'est pas encore dans la base de prix (extension sans doute trop récente).
+      Vérifie son prix directement sur Cardmarket.</p>
+      <div class="actions">
+        <a class="button primary" href="https://www.cardmarket.com/fr/Pokemon/Products/Search?searchString=${encodeURIComponent(query)}" target="_blank" rel="noopener">Voir « ${escapeHtml(query)} » sur Cardmarket</a>
+      </div>
+      ${hasOthers ? '<p class="price-label">Autres versions de ce Pokémon, pour comparer :</p>' : ''}
+    </div>`;
+  return el;
+}
+
 function renderResults() {
   els.results.innerHTML = '';
+  if (missingBox) els.results.appendChild(missingBox);
   shown.forEach(({ card, best }) => els.results.appendChild(renderCard(card, best)));
 }
 
