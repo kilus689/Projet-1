@@ -5,8 +5,9 @@ et elle affiche son prix sur **Cardmarket**, ajusté selon l'état de la carte.
 
 ## Fonctionnement
 
-1. **Photos** : touche « Recto » (et « Verso » si tu veux l'état) : le téléphone propose
-   l'appareil photo ou la photothèque. Le fond autour de la carte est retiré automatiquement.
+1. **Photos** : touche « Recto » (et « Verso » si tu veux l'état) : la caméra s'ouvre avec un
+   cadre jaune où placer la carte, ce qui permet de lire le nom et le numéro au bon endroit.
+   On peut aussi choisir une photo existante (le fond autour de la carte est alors retiré au mieux).
 2. **Reconnaissance**, deux modes :
    - **Avec une clé Claude** (recommandé, réglages en bas de page) : l'IA lit la carte dans
      n'importe quelle langue (français, anglais, japonais…), son numéro et son code d'extension,
@@ -35,8 +36,9 @@ Fichiers statiques (`index.html`, `app.js`, `style.css`), aucune installation.
 
 ## Conseils pour une bonne lecture
 
-- Carte à plat, bien éclairée, sans reflet, sur un fond uni qui contraste avec la carte.
-- La carte doit remplir la plus grande partie de la photo.
+- Carte à plat, bien éclairée, sans reflet, qui remplit tout le cadre jaune.
+- Sans clé Claude, si le nom n'est pas lu, le numéro (ex : 059/103) suffit souvent :
+  l'app cherche alors dans toutes les langues, japonais compris.
 
 ## Limites
 

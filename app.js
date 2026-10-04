@@ -159,22 +159,79 @@ function trimBackground(src) {
   return out;
 }
 
-async function onPhoto(side, file) {
+async function onPhotoFile(side, file) {
   setStatus('Photo reçue, préparation…');
   try {
-    photos[side] = await fileToCanvas(file);
+    setPhoto(side, await fileToCanvas(file));
   } catch (err) {
     setStatus("Impossible d'ouvrir cette image : " + err.message, true);
-    return;
   }
+}
+
+function setPhoto(side, canvas) {
+  photos[side] = canvas;
   const slot = $(side === 'front' ? 'slot-front' : 'slot-back');
   const img = slot.querySelector('img');
-  img.src = photos[side].toDataURL('image/jpeg', 0.8);
+  img.src = canvas.toDataURL('image/jpeg', 0.8);
   img.hidden = false;
   slot.classList.add('filled');
   els.btnAnalyze.disabled = !photos.front;
   if (side === 'front' || getKey()) analyze();
   else setStatus('Verso ajouté. Il sert à estimer l\'état avec la reconnaissance par IA.');
+}
+
+/* ---------- Caméra avec cadre ---------- */
+
+const cam = {
+  box: $('camera'), title: $('camera-title'), video: $('video'), guide: $('guide'),
+  shoot: $('cam-shoot'), file: $('cam-file'), cancel: $('cam-cancel'),
+  stream: null, side: 'front',
+};
+
+async function openCamera(side) {
+  cam.side = side;
+  cam.title.textContent = side === 'front' ? 'Recto de la carte' : 'Verso de la carte';
+  cam.box.hidden = false;
+  cam.shoot.disabled = true;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cam.title.textContent += ' : caméra indisponible, choisis une photo';
+    return;
+  }
+  try {
+    cam.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 } },
+      audio: false,
+    });
+    cam.video.srcObject = cam.stream;
+    await cam.video.play();
+    cam.shoot.disabled = false;
+  } catch (err) {
+    cam.title.textContent = "Caméra refusée ou indisponible : choisis une photo dans la photothèque.";
+  }
+}
+
+function closeCamera() {
+  cam.stream?.getTracks().forEach((t) => t.stop());
+  cam.stream = null;
+  cam.video.srcObject = null;
+  cam.box.hidden = true;
+}
+
+// Capture uniquement l'intérieur du cadre jaune, à la pleine résolution de la caméra.
+function captureGuide() {
+  const v = cam.video;
+  const vr = v.getBoundingClientRect();
+  const gr = cam.guide.getBoundingClientRect();
+  const scale = v.videoWidth / vr.width;
+  const sx = Math.max(0, (gr.left - vr.left) * scale);
+  const sy = Math.max(0, (gr.top - vr.top) * scale);
+  const sw = Math.min(v.videoWidth - sx, gr.width * scale);
+  const sh = Math.min(v.videoHeight - sy, gr.height * scale);
+  const c = document.createElement('canvas');
+  c.width = Math.round(sw);
+  c.height = Math.round(sh);
+  c.getContext('2d').drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
 }
 
 /* ---------- Reconnaissance par IA (Claude) ---------- */
@@ -274,7 +331,7 @@ async function getWorker(langs) {
 }
 
 // Découpe une zone (en fractions de la carte), niveaux de gris, contraste, agrandissement.
-function cropRegion(src, x, y, w, h, targetHeight) {
+function cropRegion(src, x, y, w, h, targetHeight, binarize = false) {
   const sx = src.width * x, sy = src.height * y, sw = src.width * w, sh = src.height * h;
   const scale = Math.max(1, targetHeight / sh);
   const c = document.createElement('canvas');
@@ -293,9 +350,30 @@ function cropRegion(src, x, y, w, h, targetHeight) {
     if (g > max) max = g;
   }
   const range = Math.max(1, max - min);
+  const hist = new Array(256).fill(0);
   for (let i = 0; i < d.length; i += 4) {
-    const g = ((d[i] - min) / range) * 255;
+    const g = Math.round(((d[i] - min) / range) * 255);
     d[i] = d[i + 1] = d[i + 2] = g;
+    hist[g]++;
+  }
+  if (binarize) {
+    // Seuil d'Otsu, texte en noir sur fond blanc.
+    const total = d.length / 4;
+    let sum = 0, sumB = 0, wB = 0, best = 0, threshold = 128;
+    for (let t = 0; t < 256; t++) sum += t * hist[t];
+    for (let t = 0; t < 256; t++) {
+      wB += hist[t];
+      if (!wB || wB === total) continue;
+      sumB += t * hist[t];
+      const mB = sumB / wB, mF = (sum - sumB) / (total - wB);
+      const between = wB * (total - wB) * (mB - mF) ** 2;
+      if (between > best) { best = between; threshold = t; }
+    }
+    const darkText = wB && hist.slice(0, threshold).reduce((a, b) => a + b, 0) < total / 2;
+    for (let i = 0; i < d.length; i += 4) {
+      const black = darkText ? d[i] <= threshold : d[i] > threshold;
+      d[i] = d[i + 1] = d[i + 2] = black ? 0 : 255;
+    }
   }
   ctx.putImageData(img, 0, 0);
   return c;
@@ -330,6 +408,14 @@ function findNumber(text) {
   return m ? `${m[1]}/${m[2]}` : '';
 }
 
+// Parmi plusieurs lectures, préfère un numéro écrit sur autant de chiffres que le total
+// (les cartes récentes impriment « 059/103 ») : « 05/103 » est alors un chiffre manqué.
+function pickNumber(readings) {
+  const valid = readings.filter(Boolean);
+  const padded = valid.find((r) => { const [a, b] = r.split('/'); return a.length === b.length; });
+  return padded || valid.sort((a, b) => b.length - a.length)[0] || '';
+}
+
 async function analyzeWithOcr() {
   const card = photos.front;
   const chosen = els.lang.value;
@@ -359,11 +445,14 @@ async function analyzeWithOcr() {
   // Numéro : en bas à gauche de la carte, en tout petit.
   const numWorker = await getWorker(['eng']);
   await numWorker.setParameters({ tessedit_char_whitelist: '0123456789/', tessedit_pageseg_mode: '11' });
-  let number = '';
-  for (const [x, y, w, h] of [[0, 0.86, 0.55, 0.14], [0, 0.8, 1, 0.2]]) {
-    number = findNumber((await numWorker.recognize(cropRegion(card, x, y, w, h, 220))).data.text);
-    if (number) break;
+  const readings = [];
+  for (const [x, y, w, h] of [[0, 0.88, 0.5, 0.12], [0, 0.82, 1, 0.18]]) {
+    for (const bin of [false, true]) {
+      readings.push(findNumber((await numWorker.recognize(cropRegion(card, x, y, w, h, 260, bin))).data.text));
+    }
+    if (pickNumber(readings).split('/').every((p, _, a) => p.length === a[1].length)) break;
   }
+  const number = pickNumber(readings);
 
   const lang = chosen !== 'auto' ? chosen : (best.lang === 'ja' ? 'ja' : 'auto');
   return { name: best.name, number, lang };
@@ -481,7 +570,10 @@ async function search() {
 
   // Langues à essayer : celle choisie, sinon déduite de l'écriture du nom.
   const chosen = els.lang.value;
-  const langs = chosen !== 'auto' ? [chosen] : JA_RE.test(name) ? ['ja'] : ['fr', 'en', 'de', 'es', 'it'];
+  const langs = chosen !== 'auto' ? [chosen]
+    : JA_RE.test(name) ? ['ja']
+    : name ? ['fr', 'en', 'de', 'es', 'it', 'ja']
+    : ['fr', 'en', 'ja', 'de', 'es', 'it']; // sans nom : seul le numéro guide, le japonais est fréquent
 
   setStatus('Recherche de la carte et de son prix…');
   els.results.innerHTML = '';
@@ -489,9 +581,12 @@ async function search() {
   try {
     let candidates = [], lang = langs[0];
     for (const l of langs) {
-      candidates = await findCandidates(l, name, num, total);
-      lang = l;
-      if (candidates.length && candidates[0].score >= 40) break;
+      const found = await findCandidates(l, name, num, total);
+      if (found.length && (!candidates.length || found[0].score > candidates[0].score)) {
+        candidates = found;
+        lang = l;
+      }
+      if (candidates.length && candidates[0].score >= 60) break;
     }
     // Sûr = bon nom et bon numéro, ou (sans nom) bon numéro dans une extension du bon total.
     const sure = candidates.length && candidates[0].score >= 60;
@@ -575,13 +670,21 @@ function renderCard(card, isBest) {
 window.addEventListener('error', (e) => setStatus('Erreur : ' + e.message, true));
 window.addEventListener('unhandledrejection', (e) => setStatus('Erreur : ' + (e.reason?.message || e.reason), true));
 
-document.querySelectorAll('.slot input[type=file]').forEach((input) => {
-  input.addEventListener('change', () => {
-    const f = input.files[0];
-    input.value = '';
-    if (f) onPhoto(input.dataset.side, f);
-  });
+document.querySelectorAll('.slot').forEach((slot) => {
+  slot.addEventListener('click', () => openCamera(slot.dataset.side));
 });
+cam.shoot.addEventListener('click', () => {
+  const canvas = captureGuide();
+  closeCamera();
+  setPhoto(cam.side, canvas);
+});
+cam.file.addEventListener('change', () => {
+  const f = cam.file.files[0];
+  cam.file.value = '';
+  closeCamera();
+  if (f) onPhotoFile(cam.side, f);
+});
+cam.cancel.addEventListener('click', closeCamera);
 els.btnAnalyze.addEventListener('click', analyze);
 els.form.addEventListener('submit', (e) => { e.preventDefault(); search(); });
 els.condition.addEventListener('change', renderResults);

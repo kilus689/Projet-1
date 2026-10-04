@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#1d2b53">
   <title>Scan Pokémon</title>
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="app.js?v=5" defer></script>
+  <script src="app.js?v=6" defer></script>
 </head>
 <body>
   <header>
@@ -18,16 +18,14 @@
   <main>
     <section class="card-box">
       <div class="slots">
-        <label class="slot" id="slot-front">
-          <input type="file" accept="image/*" data-side="front" hidden>
+        <button type="button" class="slot" id="slot-front" data-side="front">
           <img alt="" hidden>
           <span class="slot-text">📷 <strong>Recto</strong><br><small>Touche pour photographier</small></span>
-        </label>
-        <label class="slot" id="slot-back">
-          <input type="file" accept="image/*" data-side="back" hidden>
+        </button>
+        <button type="button" class="slot" id="slot-back" data-side="back">
           <img alt="" hidden>
           <span class="slot-text">🔄 <strong>Verso</strong><br><small>Optionnel, pour l'état</small></span>
-        </label>
+        </button>
       </div>
       <button id="btn-analyze" class="primary" disabled>Analyser la carte</button>
       <p id="mode" class="hint"></p>
@@ -100,6 +98,21 @@
       </div>
     </details>
   </main>
+
+  <div id="camera" class="camera" hidden>
+    <p id="camera-title" class="camera-title">Recto</p>
+    <div class="camera-wrap">
+      <video id="video" playsinline muted></video>
+      <div id="guide"><span>Place la carte bien dans le cadre</span></div>
+    </div>
+    <div class="buttons camera-buttons">
+      <button id="cam-shoot" type="button" class="primary">📸 Prendre la photo</button>
+      <label class="button secondary">🖼️ Photothèque
+        <input id="cam-file" type="file" accept="image/*" hidden>
+      </label>
+      <button id="cam-cancel" type="button" class="secondary">Annuler</button>
+    </div>
+  </div>
 
   <footer>
     Prix : Cardmarket via l'API <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a>.
