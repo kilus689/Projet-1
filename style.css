@@ -155,7 +155,9 @@ details label { display: flex; flex-direction: column; gap: 4px; font-size: .85r
 .home { max-width: 640px; margin: 0 auto; padding: 48px 16px 24px; }
 .brand { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .brand h1 { font-size: 2.4rem; letter-spacing: .5px; }
-.mascot { width: 76px; height: 76px; }
+.mascot { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; border: 3px solid; box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+.mascot.pika { border-color: #ffcb05; }
+.mascot.aqua { border-color: #4aa8d4; }
 .home .sub { text-align: center; margin-bottom: 28px; }
 .menu { display: flex; flex-direction: column; gap: 12px; }
 .menu-item {
@@ -182,5 +184,5 @@ details label { display: flex; flex-direction: column; gap: 4px; font-size: .85r
 
 @media (max-width: 420px) {
   .brand h1 { font-size: 2rem; }
-  .mascot { width: 58px; height: 58px; }
+  .mascot { width: 62px; height: 62px; }
 }
