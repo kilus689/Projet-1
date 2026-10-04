@@ -16,43 +16,45 @@
   </header>
 
   <main>
-    <section id="capture" class="card-box">
-      <div id="camera-wrap" hidden>
-        <video id="video" playsinline muted></video>
-        <div id="guide"><span>Place la carte dans le cadre</span></div>
-      </div>
-      <img id="preview" alt="Photo de la carte" hidden>
-
-      <div class="buttons">
-        <button id="btn-camera" class="primary">📷 Ouvrir la caméra</button>
-        <button id="btn-shoot" class="primary" hidden>Prendre la photo</button>
-        <label class="button secondary">
-          🖼️ Choisir une photo
-          <input id="file" type="file" accept="image/*" capture="environment" hidden>
+    <section class="card-box">
+      <div class="slots">
+        <label class="slot" id="slot-front">
+          <input type="file" accept="image/*" data-side="front" hidden>
+          <img alt="" hidden>
+          <span class="slot-text">📷 <strong>Recto</strong><br><small>Touche pour photographier</small></span>
+        </label>
+        <label class="slot" id="slot-back">
+          <input type="file" accept="image/*" data-side="back" hidden>
+          <img alt="" hidden>
+          <span class="slot-text">🔄 <strong>Verso</strong><br><small>Optionnel, pour l'état</small></span>
         </label>
       </div>
+      <button id="btn-analyze" class="primary" disabled>Analyser la carte</button>
+      <p id="mode" class="hint"></p>
       <p id="status" class="status" aria-live="polite"></p>
+      <p id="condition-notes" class="notes" hidden></p>
     </section>
 
     <section class="card-box">
       <form id="search-form">
         <div class="row">
           <label>Nom de la carte
-            <input id="name" type="text" placeholder="ex : Dracaufeu" autocomplete="off">
+            <input id="name" type="text" placeholder="ex : Dracaufeu, ニンフィア" autocomplete="off">
           </label>
           <label class="small">Numéro
-            <input id="number" type="text" placeholder="ex : 006/165" autocomplete="off">
+            <input id="number" type="text" placeholder="ex : 059/103" autocomplete="off">
           </label>
         </div>
         <div class="row">
           <label class="small">Langue de la carte
             <select id="lang">
+              <option value="auto">Automatique</option>
               <option value="fr">Français</option>
               <option value="en">Anglais</option>
+              <option value="ja">Japonais</option>
               <option value="de">Allemand</option>
               <option value="es">Espagnol</option>
               <option value="it">Italien</option>
-              <option value="ja">Japonais</option>
             </select>
           </label>
           <label class="small">État de la carte
@@ -75,6 +77,28 @@
 
     <section id="results"></section>
 
+    <details class="card-box" id="settings">
+      <summary>⚙️ Réglages : reconnaissance par IA</summary>
+      <p>
+        Avec une clé <strong>Claude</strong> (Anthropic), l'app lit la carte dans n'importe quelle langue
+        et estime son état à partir du recto et du verso. Sans clé, elle utilise un lecteur de texte
+        gratuit, moins fiable, et l'état se choisit à la main.
+      </p>
+      <p class="hint">
+        Coût : quelques centimes par carte, facturés sur ton compte Anthropic
+        (<a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a>).
+        La clé reste uniquement sur cet appareil. Fixe une limite de dépense dans ton compte.
+      </p>
+      <div class="row">
+        <label>Clé API Claude
+          <input id="api-key" type="password" placeholder="sk-ant-…" autocomplete="off">
+        </label>
+      </div>
+      <div class="row">
+        <button id="btn-save-key" type="button" class="primary">Enregistrer</button>
+        <button id="btn-clear-key" type="button" class="secondary">Effacer la clé</button>
+      </div>
+    </details>
   </main>
 
   <footer>
