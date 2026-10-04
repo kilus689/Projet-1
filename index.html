@@ -52,8 +52,22 @@
               <option value="de">Allemand</option>
               <option value="es">Espagnol</option>
               <option value="it">Italien</option>
+              <option value="ja">Japonais</option>
             </select>
           </label>
+          <label class="small">État de la carte
+            <select id="condition">
+              <option value="MT">Mint</option>
+              <option value="NM" selected>Near Mint</option>
+              <option value="EX">Excellent</option>
+              <option value="GD">Good</option>
+              <option value="LP">Light Played</option>
+              <option value="PL">Played</option>
+              <option value="PO">Poor</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
           <button type="submit" class="primary">🔎 Rechercher</button>
         </div>
       </form>
@@ -61,16 +75,12 @@
 
     <section id="results"></section>
 
-    <section class="card-box" id="list-box" hidden>
-      <h2>Ma liste <span id="list-total"></span></h2>
-      <ul id="list"></ul>
-      <button id="btn-clear" class="secondary">Vider la liste</button>
-    </section>
   </main>
 
   <footer>
     Prix : Cardmarket via l'API <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a>.
     Les prix sont indicatifs et mis à jour environ une fois par jour.
+    Le prix selon l'état est une estimation.
   </footer>
 </body>
 </html>

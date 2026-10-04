@@ -102,6 +102,7 @@ input, select {
 .result h3 { margin: 0; font-size: 1.05rem; }
 .result .meta { color: var(--muted); font-size: .85rem; margin: 2px 0 8px; }
 .badge { display: inline-block; background: var(--accent); color: #fff; font-size: .7rem; padding: 2px 6px; border-radius: 6px; margin-left: 6px; vertical-align: middle; }
+.price-condition { font-size: .8rem; color: var(--muted); margin: 0 0 8px; }
 .price-main { font-size: 1.6rem; font-weight: 700; color: var(--good); margin: 0; }
 .price-label { font-size: .75rem; color: var(--muted); margin: 0 0 6px; }
 table.prices { width: 100%; border-collapse: collapse; font-size: .85rem; }
@@ -111,10 +112,6 @@ table.prices td { text-align: right; font-variant-numeric: tabular-nums; }
 .result .actions a, .result .actions button { flex: 1 1 auto; font-size: .85rem; padding: 8px 10px; text-decoration: none; }
 .no-price { color: var(--muted); font-style: italic; margin: 4px 0; }
 
-#list { list-style: none; padding: 0; margin: 0 0 12px; }
-#list li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
-#list li button { flex: 0 0 auto; padding: 0 8px; background: none; color: var(--muted); }
-#list-total { color: var(--good); }
 
 @media (max-width: 420px) {
   .result img { width: 84px; }

@@ -8,13 +8,25 @@ const els = {
   cameraWrap: $('camera-wrap'), video: $('video'), guide: $('guide'), preview: $('preview'),
   btnCamera: $('btn-camera'), btnShoot: $('btn-shoot'), file: $('file'), status: $('status'),
   form: $('search-form'), name: $('name'), number: $('number'), lang: $('lang'),
-  results: $('results'), listBox: $('list-box'), list: $('list'), listTotal: $('list-total'),
-  btnClear: $('btn-clear'),
+  condition: $('condition'), results: $('results'),
+};
+
+// Cardmarket ne publie qu'un prix global (surtout des ventes en très bon état) :
+// on applique une décote approximative selon l'état choisi.
+const CONDITIONS = {
+  MT: { label: 'Mint', factor: 1 },
+  NM: { label: 'Near Mint', factor: 1 },
+  EX: { label: 'Excellent', factor: 0.85 },
+  GD: { label: 'Good', factor: 0.7 },
+  LP: { label: 'Light Played', factor: 0.55 },
+  PL: { label: 'Played', factor: 0.4 },
+  PO: { label: 'Poor', factor: 0.25 },
 };
 
 let stream = null;
-let ocrWorker = null;
+const ocrWorkers = {};
 const setsCache = {};
+let shown = []; // cartes affichées, pour recalculer quand l'état change
 
 /* ---------- Utilitaires ---------- */
 
@@ -25,7 +37,7 @@ function setStatus(msg, isError = false) {
 
 function normalize(s) {
   return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    .replace(new RegExp(`[^a-z0-9 ${JA_CHARS}]`, 'g'), ' ').replace(/\s+/g, ' ').trim();
 }
 
 function levenshtein(a, b) {
@@ -134,12 +146,15 @@ async function fileToCanvas(file) {
 
 /* ---------- Reconnaissance du texte (OCR) ---------- */
 
-async function getWorker() {
-  if (ocrWorker) return ocrWorker;
+async function getWorker(lang) {
+  const extra = { de: 'deu', es: 'spa', it: 'ita' }[lang];
+  const langs = lang === 'ja' ? ['jpn', 'eng'] : ['fra', 'eng', ...(extra ? [extra] : [])];
+  const key = langs.join('+');
+  if (ocrWorkers[key]) return ocrWorkers[key];
   if (!window.Tesseract) throw new Error("Le module de lecture de texte n'a pas pu être chargé (connexion ?)");
   setStatus('Chargement du lecteur de texte (première fois uniquement)…');
-  ocrWorker = await Tesseract.createWorker(['fra', 'eng']);
-  return ocrWorker;
+  ocrWorkers[key] = await Tesseract.createWorker(langs);
+  return ocrWorkers[key];
 }
 
 // Découpe une zone (en fractions de la carte), passe en niveaux de gris, contraste, agrandit.
@@ -170,9 +185,21 @@ function cropRegion(src, x, y, w, h, targetHeight) {
   return c;
 }
 
+const JA_CHARS = '\u3040-\u30ff\u4e00-\u9fff\uff10-\uff19ー';
+const JA_STAGE_WORDS = /(たね|[12１２]?進化|HP|ＨＰ|ポケモン)/g;
 const STAGE_WORDS = /\b(de base|base|basic|niveau ?\d|niv\.?|stage ?\d?|evolution|évolution|evolue[es]? de|évolue de|evolves from|turbo|restaur[ée]|pv|hp|tera|téra)\b/gi;
 
-function cleanName(raw) {
+function cleanName(raw, lang) {
+  if (lang === 'ja') {
+    const lines = raw.split('\n')
+      .map((l) => l.replace(JA_STAGE_WORDS, ' ').replace(new RegExp(`[^${JA_CHARS}A-Za-z ]`, 'g'), ' ')
+        .replace(/[0-9０-９]+/g, ' ').replace(/\s+/g, ' ').trim()
+        // Tesseract met souvent des espaces entre les caractères japonais.
+        .replace(new RegExp(`(?<=[${JA_CHARS}]) (?=[${JA_CHARS}])`, 'g'), ''))
+      .filter((l) => new RegExp(`[${JA_CHARS}]{2,}`).test(l));
+    lines.sort((a, b) => b.length - a.length);
+    return lines[0] || '';
+  }
   const lines = raw.split('\n')
     .map((l) => l.replace(STAGE_WORDS, ' ').replace(/\d+/g, ' ')
       .replace(/[^A-Za-zÀ-ÿ'’\- ]/g, ' ').replace(/\s+/g, ' ').trim())
@@ -189,14 +216,14 @@ function findNumber(text) {
   return m ? `${m[1]}/${m[2]}` : '';
 }
 
-async function readCard(canvas) {
-  const worker = await getWorker();
+async function readCard(canvas, lang) {
+  const worker = await getWorker(lang);
   setStatus('Lecture de la carte…');
 
   await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '7' });
   const nameImg = cropRegion(canvas, 0.03, 0.025, 0.72, 0.09, 110);
   const nameText = (await worker.recognize(nameImg)).data.text;
-  let name = cleanName(nameText);
+  let name = cleanName(nameText, lang);
 
   await worker.setParameters({ tessedit_char_whitelist: '0123456789/', tessedit_pageseg_mode: '11' });
   const numImg = cropRegion(canvas, 0, 0.88, 1, 0.11, 160);
@@ -207,7 +234,7 @@ async function readCard(canvas) {
     await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '3' });
     const full = (await worker.recognize(cropRegion(canvas, 0, 0, 1, 1, 1400))).data.text;
     if (!number) number = findNumber(full);
-    if (!name) name = cleanName(full.split('\n').slice(0, 4).join('\n'));
+    if (!name) name = cleanName(full.split('\n').slice(0, 4).join('\n'), lang);
   }
   return { name, number };
 }
@@ -217,7 +244,7 @@ async function handleImage(canvas) {
   els.preview.hidden = false;
   els.results.innerHTML = '';
   try {
-    const { name, number } = await readCard(canvas);
+    const { name, number } = await readCard(canvas, els.lang.value);
     els.name.value = name;
     els.number.value = number;
     if (!name && !number) {
@@ -293,9 +320,12 @@ async function search() {
   els.results.innerHTML = '';
   try {
     let candidates = await findCandidates(lang, name, num, total);
-    // Rien en français ? On tente en anglais (et inversement).
-    if (!candidates.length) {
-      lang = lang === 'en' ? 'fr' : 'en';
+    // Rien trouvé ? On tente les autres langues (un nom japonais ne se cherche qu'en japonais).
+    const fallbacks = /[\u3040-\u30ff\u4e00-\u9fff]/.test(name) ? ['ja'] : ['fr', 'en'];
+    for (const other of fallbacks) {
+      if (candidates.length) break;
+      if (other === lang) continue;
+      lang = other;
       candidates = await findCandidates(lang, name, num, total);
     }
     if (!candidates.length) {
@@ -307,15 +337,18 @@ async function search() {
     const details = await Promise.all(top.map((c) =>
       getJson(`${API}/${lang}/cards/${encodeURIComponent(c.brief.id)}`).catch(() => null)));
 
-    els.results.innerHTML = '';
-    top.forEach((c, i) => {
-      if (details[i]) els.results.appendChild(renderCard(details[i], i === 0 && c.score >= 60));
-    });
+    shown = top.map((c, i) => ({ card: details[i], best: i === 0 && c.score >= 60 })).filter((x) => x.card);
+    renderResults();
     const extra = candidates.length > top.length ? ` (${candidates.length} correspondances, les plus probables en premier)` : '';
     setStatus(`Résultats${extra}.`);
   } catch (err) {
     setStatus("Erreur lors de la recherche : " + err.message, true);
   }
+}
+
+function renderResults() {
+  els.results.innerHTML = '';
+  shown.forEach(({ card, best }) => els.results.appendChild(renderCard(card, best)));
 }
 
 function cardmarketUrl(card) {
@@ -326,13 +359,16 @@ function renderCard(card, isBest) {
   const cm = card.pricing?.cardmarket;
   const hasHolo = cm && (cm['trend-holo'] || cm['avg-holo']);
   const mainPrice = cm ? (cm.trend || cm.avg30 || cm.avg || cm['trend-holo'] || cm['avg-holo']) : null;
+  const cond = CONDITIONS[els.condition.value] || CONDITIONS.NM;
+  const adj = (v) => (typeof v === 'number' ? v * cond.factor : v);
 
   const row = (label, normal, holo) =>
-    `<tr><th>${label}</th><td>${formatEur(normal)}</td>${hasHolo ? `<td>${formatEur(holo)}</td>` : ''}</tr>`;
+    `<tr><th>${label}</th><td>${formatEur(adj(normal))}</td>${hasHolo ? `<td>${formatEur(adj(holo))}</td>` : ''}</tr>`;
 
   const prices = cm ? `
-    <p class="price-label">Prix tendance Cardmarket</p>
-    <p class="price-main">${formatEur(mainPrice)}</p>
+    <p class="price-label">Prix Cardmarket · état ${cond.label}</p>
+    <p class="price-main">${formatEur(adj(mainPrice))}</p>
+    ${cond.factor < 1 ? `<p class="price-condition">Estimation (≈ ${Math.round(cond.factor * 100)} % du prix Near Mint de ${formatEur(mainPrice)})</p>` : ''}
     <table class="prices">
       ${hasHolo ? '<tr><th></th><td>Normale</td><td>Holo/Reverse</td></tr>' : ''}
       ${row('Tendance', cm.trend, cm['trend-holo'])}
@@ -354,48 +390,9 @@ function renderCard(card, isBest) {
       ${prices}
       <div class="actions">
         <a class="button secondary" href="${cardmarketUrl(card)}" target="_blank" rel="noopener">Voir sur Cardmarket</a>
-        ${mainPrice ? '<button class="primary" type="button">+ Ma liste</button>' : ''}
       </div>
     </div>`;
-  el.querySelector('.actions button')?.addEventListener('click', () => {
-    addToList({ id: card.id, name: card.name, set: card.set?.name || '', price: mainPrice });
-  });
   return el;
-}
-
-/* ---------- Ma liste (stockée sur l'appareil) ---------- */
-
-function loadList() {
-  try { return JSON.parse(localStorage.getItem('pokeList') || '[]'); } catch { return []; }
-}
-
-function saveList(list) {
-  try { localStorage.setItem('pokeList', JSON.stringify(list)); } catch { /* stockage indisponible */ }
-  renderList(list);
-}
-
-function addToList(item) {
-  const list = loadList();
-  list.push(item);
-  saveList(list);
-}
-
-function renderList(list = loadList()) {
-  els.listBox.hidden = !list.length;
-  els.list.innerHTML = '';
-  list.forEach((item, i) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<span>${escapeHtml(item.name)} <small>(${escapeHtml(item.set)})</small></span>
-      <span>${formatEur(item.price)} <button type="button" aria-label="Retirer">✕</button></span>`;
-    li.querySelector('button').addEventListener('click', () => {
-      const l = loadList();
-      l.splice(i, 1);
-      saveList(l);
-    });
-    els.list.appendChild(li);
-  });
-  const sum = list.reduce((s, it) => s + (it.price || 0), 0);
-  els.listTotal.textContent = list.length ? `— ${formatEur(sum)}` : '';
 }
 
 /* ---------- Branchements ---------- */
@@ -418,5 +415,4 @@ els.file.addEventListener('change', async () => {
   }
 });
 els.form.addEventListener('submit', (e) => { e.preventDefault(); search(); });
-els.btnClear.addEventListener('click', () => saveList([]));
-renderList();
+els.condition.addEventListener('change', renderResults);
