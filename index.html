@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1d2b53">
+  <title>Scan Pokémon</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Scan Pokémon</h1>
+    <p class="sub">Photographie une carte pour voir son prix sur Cardmarket</p>
+  </header>
+
+  <main>
+    <section id="capture" class="card-box">
+      <div id="camera-wrap" hidden>
+        <video id="video" playsinline muted></video>
+        <div id="guide"><span>Place la carte dans le cadre</span></div>
+      </div>
+      <img id="preview" alt="Photo de la carte" hidden>
+
+      <div class="buttons">
+        <button id="btn-camera" class="primary">📷 Ouvrir la caméra</button>
+        <button id="btn-shoot" class="primary" hidden>Prendre la photo</button>
+        <label class="button secondary">
+          🖼️ Choisir une photo
+          <input id="file" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+      </div>
+      <p id="status" class="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card-box">
+      <form id="search-form">
+        <div class="row">
+          <label>Nom de la carte
+            <input id="name" type="text" placeholder="ex : Dracaufeu" autocomplete="off">
+          </label>
+          <label class="small">Numéro
+            <input id="number" type="text" placeholder="ex : 006/165" autocomplete="off">
+          </label>
+        </div>
+        <div class="row">
+          <label class="small">Langue de la carte
+            <select id="lang">
+              <option value="fr">Français</option>
+              <option value="en">Anglais</option>
+              <option value="de">Allemand</option>
+              <option value="es">Espagnol</option>
+              <option value="it">Italien</option>
+            </select>
+          </label>
+          <button type="submit" class="primary">🔎 Rechercher</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="results"></section>
+
+    <section class="card-box" id="list-box" hidden>
+      <h2>Ma liste <span id="list-total"></span></h2>
+      <ul id="list"></ul>
+      <button id="btn-clear" class="secondary">Vider la liste</button>
+    </section>
+  </main>
+
+  <footer>
+    Prix : Cardmarket via l'API <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a>.
+    Les prix sont indicatifs et mis à jour environ une fois par jour.
+  </footer>
+</body>
+</html>
