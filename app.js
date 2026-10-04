@@ -334,21 +334,26 @@ async function analyzeWithOcr() {
   const card = photos.front;
   const chosen = els.lang.value;
   setStatus('Lecture de la carte…');
-  // Zone large (le cadrage n'est jamais parfait) : le nom est la plus longue ligne lue.
-  const nameImg = cropRegion(card, 0, 0.01, 0.8, 0.18, 260);
+  // Plusieurs zones (le cadrage n'est jamais parfait) : on garde la lecture la plus sûre.
+  const nameZones = [
+    { img: cropRegion(card, 0.1, 0.02, 0.65, 0.1, 140), psm: '7' },  // ligne du nom seule
+    { img: cropRegion(card, 0, 0.01, 0.8, 0.18, 260), psm: '6' },    // haut de carte, plus large
+  ];
 
-  // Nom : on essaie l'alphabet latin et le japonais, on garde la lecture la plus sûre.
+  // Nom : on essaie l'alphabet latin et le japonais.
   const tries = [];
   if (chosen !== 'ja') tries.push({ lang: 'latin', langs: ['fra', 'eng'] });
   if (chosen === 'auto' || chosen === 'ja') tries.push({ lang: 'ja', langs: ['jpn'] });
   let best = { name: '', conf: -1, lang: 'latin' };
   for (const t of tries) {
     const worker = await getWorker(t.langs);
-    await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '6' });
-    const { text, confidence } = (await worker.recognize(nameImg)).data;
-    const name = cleanName(text, t.lang);
-    const conf = name ? confidence + (t.lang === 'ja' && JA_RE.test(name) ? 10 : 0) : -1;
-    if (conf > best.conf) best = { name, conf, lang: t.lang };
+    for (const zone of nameZones) {
+      await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: zone.psm });
+      const { text, confidence } = (await worker.recognize(zone.img)).data;
+      const name = cleanName(text, t.lang);
+      const conf = name ? confidence + (t.lang === 'ja' && JA_RE.test(name) ? 10 : 0) : -1;
+      if (conf > best.conf) best = { name, conf, lang: t.lang };
+    }
   }
 
   // Numéro : en bas à gauche de la carte, en tout petit.
@@ -455,7 +460,7 @@ async function findCandidates(lang, name, num, total) {
     const localNum = parseInt(c.localId, 10);
     let score = name ? similarity(name, c.name) * 50 : 0;
     if (num && localNum === num) score += 40;
-    if (total && set?.cardCount && (set.cardCount.official === total || set.cardCount.total === total)) score += 25;
+    if (total && set?.cardCount?.official === total) score += 25;
     if (setCode && compact(setCode) === compact(setId)) score += 20;
     return { brief: c, score };
   });
@@ -488,8 +493,13 @@ async function search() {
       lang = l;
       if (candidates.length && candidates[0].score >= 40) break;
     }
-    if (!candidates.length) {
-      setStatus('Aucune carte trouvée. Vérifie la langue, le nom ou le numéro puis relance.', true);
+    // Sûr = bon nom et bon numéro, ou (sans nom) bon numéro dans une extension du bon total.
+    const sure = candidates.length && candidates[0].score >= 60;
+    if (!candidates.length || (!sure && !name)) {
+      setStatus(name || !num
+        ? 'Aucune carte trouvée. Vérifie la langue, le nom ou le numéro puis relance.'
+        : "Je n'ai pas pu lire le nom et le numéro seul ne suffit pas. Tape le nom de la carte puis « Rechercher ».", true);
+      if (!name) els.name.focus();
       return;
     }
     if (chosen === 'auto') els.lang.value = lang;
@@ -501,7 +511,9 @@ async function search() {
     shown = top.map((c, i) => ({ card: details[i], best: i === 0 && c.score >= 60 })).filter((x) => x.card);
     renderResults();
     const extra = candidates.length > top.length ? ` (${candidates.length} correspondances, les plus probables en premier)` : '';
-    setStatus(`Résultats${extra}.`);
+    setStatus(sure
+      ? `Résultats${extra}.`
+      : "Pas de correspondance sûre : voici les cartes les plus proches. La carte est peut-être trop récente pour la base de prix, vérifie aussi sur Cardmarket.");
   } catch (err) {
     setStatus('Erreur lors de la recherche : ' + err.message, true);
   }
