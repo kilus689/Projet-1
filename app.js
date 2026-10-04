@@ -417,6 +417,33 @@ function pickNumber(readings) {
   return padded || valid.sort((a, b) => b.length - a.length)[0] || '';
 }
 
+// Mots fréquents sur les cartes, propres à chaque langue (les mots communs à plusieurs sont retirés).
+const LANG_WORDS = (() => {
+  const raw = {
+    en: 'the your this of to damage weakness retreat basic stage evolves from attack opponent opponents active flip coin heads tails energy does each card cards discard draw benched turn',
+    fr: 'le la les de des du votre vos degats faiblesse retraite niveau evolue adversaire attaque pile face lancez piece energie cette une ce chaque carte cartes defaussez piochez banc tour',
+    de: 'der die das und schaden schwache ruckzug gegner gegners deines deinem deine munze basis entwickelt energie fugt jede karte karten ablagestapel zieh bank zug',
+    es: 'el los las tu dano debilidad retirada rival moneda cara cruz basico evoluciona energia este cada carta cartas descarta roba banca turno',
+    it: 'il gli della tuo tua danni debolezza ritirata avversario moneta testa croce evolve energia questo ogni carta carte scarta pesca panchina turno',
+  };
+  const lists = Object.fromEntries(Object.entries(raw).map(([l, w]) => [l, new Set(w.split(' '))]));
+  const count = {};
+  Object.values(lists).forEach((set) => set.forEach((w) => { count[w] = (count[w] || 0) + 1; }));
+  Object.values(lists).forEach((set) => set.forEach((w) => { if (count[w] > 1) set.delete(w); }));
+  return lists;
+})();
+
+function detectLanguage(text) {
+  const words = normalize(text).split(' ');
+  let best = null, bestHits = 0, second = 0;
+  for (const [lang, set] of Object.entries(LANG_WORDS)) {
+    const hits = words.filter((w) => set.has(w)).length;
+    if (hits > bestHits) { second = bestHits; bestHits = hits; best = lang; }
+    else if (hits > second) second = hits;
+  }
+  return bestHits >= 2 && bestHits > second ? best : null;
+}
+
 async function analyzeWithOcr() {
   const card = photos.front;
   const chosen = els.lang.value;
@@ -455,7 +482,15 @@ async function analyzeWithOcr() {
   }
   const number = pickNumber(readings);
 
-  const lang = chosen !== 'auto' ? chosen : (best.lang === 'ja' ? 'ja' : 'auto');
+  let lang = chosen !== 'auto' ? chosen : (best.lang === 'ja' ? 'ja' : 'auto');
+  // Carte en alphabet latin : la langue se lit dans le texte des attaques.
+  if (lang === 'auto') {
+    setStatus('Détection de la langue…');
+    const worker = await getWorker(['fra', 'eng']);
+    await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '6' });
+    const text = (await worker.recognize(cropRegion(card, 0.04, 0.5, 0.92, 0.46, 900))).data.text;
+    lang = detectLanguage(text) || 'auto';
+  }
   return { name: best.name, number, lang };
 }
 
