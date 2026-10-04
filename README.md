@@ -1,9 +1,15 @@
-# Projet-1 — Scan Pokémon
+# Robinpoké
 
-Petite application web : on prend en photo une carte Pokémon (recto, et verso en option)
-et elle affiche son prix sur **Cardmarket**, ajusté selon l'état de la carte.
+Application web pour les cartes Pokémon. L'accueil présente les rubriques :
 
-## Fonctionnement
+- **🔍 Détecteur** : on prend en photo une carte Pokémon (recto, et verso en option)
+  et elle affiche son prix sur **Cardmarket**, ajusté selon l'état de la carte.
+
+D'autres rubriques viendront s'ajouter au menu d'accueil.
+
+## Détecteur
+
+### Fonctionnement
 
 1. **Photos** : touche « Recto » (et « Verso » si tu veux l'état) : la caméra s'ouvre avec un
    cadre jaune où placer la carte, ce qui permet de lire le nom et le numéro au bon endroit.
@@ -34,13 +40,13 @@ Fichiers statiques (`index.html`, `app.js`, `style.css`), aucune installation.
 - **En ligne** : GitHub Pages (Settings → Pages → branche `scan-pokemon`, dossier `/`).
 - **Sur ordinateur** : `python3 -m http.server 8000` puis <http://localhost:8000>.
 
-## Conseils pour une bonne lecture
+### Conseils pour une bonne lecture
 
 - Carte à plat, bien éclairée, sans reflet, qui remplit tout le cadre jaune.
 - Sans clé Claude, si le nom n'est pas lu, le numéro (ex : 059/103) suffit souvent :
   l'app cherche alors dans toutes les langues, japonais compris.
 
-## Limites
+### Limites
 
 - Prix indicatifs (mis à jour environ une fois par jour par TCGdex), l'ajustement selon l'état est une estimation.
 - Cartes japonaises : beaucoup n'ont pas de prix Cardmarket dans TCGdex (extensions propres au Japon).

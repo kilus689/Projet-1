@@ -4,15 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#1d2b53">
-  <title>Scan Pokémon</title>
-  <link rel="stylesheet" href="style.css?v=8">
+  <title>Robinpoké</title>
+  <meta name="apple-mobile-web-app-title" content="Robinpoké">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="style.css?v=10">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="app.js?v=8" defer></script>
+  <script src="app.js?v=10" defer></script>
 </head>
 <body>
-  <header>
-    <h1>Scan Pokémon</h1>
-    <p class="sub">Photographie une carte pour voir son prix sur Cardmarket</p>
+  <!-- Accueil -->
+  <section id="view-home" class="view home">
+    <div class="brand">
+      <img class="mascot" data-dex="25" alt="Pikachu">
+      <h1>Robinpoké</h1>
+      <img class="mascot" data-dex="134" alt="Aquali">
+    </div>
+    <p class="sub">Ton assistant pour les cartes Pokémon</p>
+    <nav class="menu">
+      <a class="menu-item" href="#detecteur">
+        <span class="menu-icon">🔍</span>
+        <span class="menu-text"><strong>Détecteur</strong>
+          <small>Prends une carte en photo et découvre son prix sur Cardmarket</small></span>
+        <span class="menu-arrow">›</span>
+      </a>
+    </nav>
+    <p class="hint center">D'autres rubriques arrivent bientôt…</p>
+  </section>
+
+  <!-- Détecteur -->
+  <div id="view-detecteur" class="view" hidden>
+  <header class="topbar">
+    <a href="#accueil" class="back">‹ Accueil</a>
+    <h2>🔍 Détecteur</h2>
+    <span class="topbar-spacer"></span>
   </header>
 
   <main>
@@ -98,6 +122,12 @@
       </div>
     </details>
   </main>
+  <footer>
+    Prix : Cardmarket via l'API <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a>.
+    Les prix sont indicatifs et mis à jour environ une fois par jour.
+    Le prix selon l'état est une estimation.
+  </footer>
+  </div>
 
   <div id="camera" class="camera" hidden>
     <p id="camera-title" class="camera-title">Recto</p>
@@ -114,10 +144,5 @@
     </div>
   </div>
 
-  <footer>
-    Prix : Cardmarket via l'API <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a>.
-    Les prix sont indicatifs et mis à jour environ une fois par jour.
-    Le prix selon l'état est une estimation.
-  </footer>
 </body>
 </html>
