@@ -27,7 +27,7 @@ const Sets = (() => {
   const ENERGY_LOGO = '<img class="LOGOCLASS energy-logo" src="img/energie-feu.svg?v=2" alt="Énergie Feu">';
   // Sets du 30e anniversaire.
   const isAnniv30 = (s) => /anniversaire|anniversary|30\s*(e|ème|th)?\s*(c[ée]l[ée]bration)|周年/i.test(s.name || '');
-  const ANNIV_LOGO = '<img class="LOGOCLASS anniv-logo" src="img/anniv30.svg?v=2" alt="30e anniversaire">';
+  const ANNIV_LOGO = '<img class="LOGOCLASS anniv-logo" src="img/anniv30.png?v=3" alt="30e anniversaire">';
   const setLogo = (s, cls) => isAnniv30(s) ? ANNIV_LOGO.replace('LOGOCLASS', cls)
     : isPromo(s) ? PROMO_LOGO.replace('LOGOCLASS', cls)
     : isEnergy(s) ? ENERGY_LOGO.replace('LOGOCLASS', cls)
