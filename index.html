@@ -9,10 +9,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="img/icon-180.png" type="image/png">
   <link rel="apple-touch-icon" href="img/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=19">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="sets.js?v=18" defer></script>
-  <script src="app.js?v=18" defer></script>
+  <script src="sets.js?v=19" defer></script>
+  <script src="app.js?v=19" defer></script>
 </head>
 <body>
   <!-- Accueil -->
@@ -179,6 +179,11 @@
       <button id="card-modal-close" type="button" class="modal-close" aria-label="Fermer">✕</button>
       <div id="card-modal-body"></div>
     </div>
+  </div>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <img id="lightbox-img" alt="">
+    <p class="lightbox-hint">Touche pour fermer</p>
   </div>
 
   <div id="camera" class="camera" hidden>

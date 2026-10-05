@@ -244,3 +244,14 @@ details label { display: flex; flex-direction: column; gap: 4px; font-size: .85r
   background: var(--surface); color: var(--text); border: 1px solid var(--border);
 }
 .modal-box .result .info { padding-right: 34px; }
+
+/* ---------- Carte en grand ---------- */
+img.zoomable { cursor: zoom-in; }
+.lightbox {
+  position: fixed; inset: 0; z-index: 30; background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 16px; gap: 10px; cursor: zoom-out;
+}
+.lightbox[hidden] { display: none; }
+.lightbox img { width: min(100%, calc((100vh - 70px) * 63 / 88)); height: auto; object-fit: contain; border-radius: 14px; }
+.lightbox-hint { color: #aaa; font-size: .85rem; margin: 0; }

@@ -739,7 +739,7 @@ function renderCard(card, isBest) {
   const el = document.createElement('article');
   el.className = 'result' + (isBest ? ' best' : '');
   el.innerHTML = `
-    ${card.image ? `<img src="${escapeHtml(card.image)}/low.webp" alt="${escapeHtml(card.name)}" loading="lazy">` : ''}
+    ${card.image ? `<img class="zoomable" src="${escapeHtml(card.image)}/low.webp" data-full="${escapeHtml(card.image)}/high.webp" alt="${escapeHtml(card.name)}" loading="lazy" title="Toucher pour agrandir">` : ''}
     <div class="info">
       <h3>${escapeHtml(card.name)}${isBest ? '<span class="badge">Meilleure correspondance</span>' : ''}</h3>
       <p class="meta">${escapeHtml(card.set?.name || '')} · n° ${escapeHtml(card.localId)}${setTotal ? '/' + setTotal : ''}${card.rarity ? ' · ' + escapeHtml(card.rarity) : ''}</p>
@@ -767,6 +767,22 @@ function showView() {
 }
 window.addEventListener('hashchange', showView);
 showView();
+
+/* ---------- Carte en grand ---------- */
+
+const lightbox = $('lightbox');
+const lightboxImg = $('lightbox-img');
+document.addEventListener('click', (e) => {
+  const img = e.target.closest('img.zoomable');
+  if (!img) return;
+  lightboxImg.src = img.src; // la petite image s'affiche tout de suite…
+  lightboxImg.alt = img.alt;
+  const full = new Image();  // …puis la haute définition la remplace dès qu'elle est chargée
+  full.onload = () => { if (!lightbox.hidden) lightboxImg.src = full.src; };
+  full.src = img.dataset.full;
+  lightbox.hidden = false;
+});
+lightbox.addEventListener('click', () => { lightbox.hidden = true; });
 
 /* ---------- Branchements ---------- */
 
