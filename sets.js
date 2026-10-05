@@ -21,13 +21,13 @@ const Sets = (() => {
 
   // Sets de cartes promo (ex : « Promos Écarlate et Violet », id « svp »).
   const isPromo = (s) => /promo/i.test(s.name || '') || /^[a-z]+p$/i.test(s.id || '') || /プロモ/.test(s.name || '');
-  const PROMO_LOGO = '<img class="LOGOCLASS promo-logo" src="img/promo.svg" alt="Cartes promo">';
+  const PROMO_LOGO = '<img class="LOGOCLASS promo-logo" src="img/promo.svg?v=2" alt="Cartes promo">';
   // Sets d'énergies (ex : « Énergies Écarlate et Violet », id « sve »).
   const isEnergy = (s) => /[ée]nergie|energy|エネルギー/i.test(s.name || '') || ['sve', 'mee'].includes(s.id);
-  const ENERGY_LOGO = '<img class="LOGOCLASS energy-logo" src="img/energie-feu.svg" alt="Énergie Feu">';
+  const ENERGY_LOGO = '<img class="LOGOCLASS energy-logo" src="img/energie-feu.svg?v=2" alt="Énergie Feu">';
   // Sets du 30e anniversaire.
   const isAnniv30 = (s) => /anniversaire|anniversary|30\s*(e|ème|th)?\s*(c[ée]l[ée]bration)|周年/i.test(s.name || '');
-  const ANNIV_LOGO = '<img class="LOGOCLASS anniv-logo" src="img/anniv30.svg" alt="30e anniversaire">';
+  const ANNIV_LOGO = '<img class="LOGOCLASS anniv-logo" src="img/anniv30.svg?v=2" alt="30e anniversaire">';
   const setLogo = (s, cls) => isAnniv30(s) ? ANNIV_LOGO.replace('LOGOCLASS', cls)
     : isPromo(s) ? PROMO_LOGO.replace('LOGOCLASS', cls)
     : isEnergy(s) ? ENERGY_LOGO.replace('LOGOCLASS', cls)
