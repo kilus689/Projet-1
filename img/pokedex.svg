@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120">
+  <!-- Pokédex rouge classique -->
+  <rect x="8" y="4" width="84" height="112" rx="10" fill="#dc1c13" stroke="#7a0d08" stroke-width="3"/>
+  <!-- Bandeau du haut avec la lentille et les voyants -->
+  <path d="M8 36 H40 L50 26 H92" fill="none" stroke="#7a0d08" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="24" cy="20" r="11" fill="#fff" stroke="#7a0d08" stroke-width="2"/>
+  <circle cx="24" cy="20" r="8" fill="#29a8ef"/>
+  <circle cx="21" cy="17" r="3" fill="#bfe8ff"/>
+  <circle cx="44" cy="13" r="3.5" fill="#ff3b30" stroke="#7a0d08" stroke-width="1.2"/>
+  <circle cx="54" cy="13" r="3.5" fill="#ffcc00" stroke="#7a0d08" stroke-width="1.2"/>
+  <circle cx="64" cy="13" r="3.5" fill="#34c759" stroke="#7a0d08" stroke-width="1.2"/>
+  <!-- Écran -->
+  <rect x="20" y="46" width="60" height="42" rx="5" fill="#e8e8e8" stroke="#7a0d08" stroke-width="2"/>
+  <rect x="27" y="52" width="46" height="30" rx="2" fill="#9fd9a6"/>
+  <path d="M33 74 L42 62 L48 69 L55 59 L67 74 Z" fill="#5fae6a"/>
+  <circle cx="27" cy="85" r="1.8" fill="#ff3b30"/>
+  <!-- Boutons -->
+  <circle cx="24" cy="102" r="5" fill="#222"/>
+  <rect x="40" y="99" width="14" height="4" rx="2" fill="#7a0d08"/>
+  <rect x="58" y="99" width="14" height="4" rx="2" fill="#29a8ef"/>
+  <path d="M80 94 h6 v4 h4 v6 h-4 v4 h-6 v-4 h-4 v-6 h4 Z" fill="#222"/>
+</svg>
