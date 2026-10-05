@@ -36,6 +36,7 @@ const ocrWorkers = {};
 const setsCache = {};
 let shown = [];        // cartes affichées, pour recalculer quand l'état change
 let missingBox = null; // encadré « carte absente de la base »
+let shownLang = 'fr';  // langue des cartes affichées (pour retrouver leur bloc)
 let englishName = '';  // nom anglais (cartes japonaises), pour le lien Cardmarket
 let setCode = '';      // code d'extension lu sur la carte (ex : SV8a)
 
@@ -650,6 +651,7 @@ async function search() {
     const names = ref ? await speciesNames(ref, name) : null;
     if (names?.en && JA_RE.test(ref.name) && !englishName) englishName = names.en;
 
+    shownLang = lang;
     shown = top.map((c, i) => ({ card: details[i], best: sure && i === 0 })).filter((x) => x.card);
     renderResults();
     if (sure) {
@@ -702,7 +704,7 @@ function renderMissing(names, num, total, hasOthers) {
 function renderResults() {
   els.results.innerHTML = '';
   if (missingBox) els.results.appendChild(missingBox);
-  shown.forEach(({ card, best }) => els.results.appendChild(renderCard(card, best)));
+  shown.forEach(({ card, best }) => els.results.appendChild(renderCard(card, best, shownLang)));
 }
 
 function cardmarketUrl(card) {
@@ -711,7 +713,18 @@ function cardmarketUrl(card) {
   return `https://www.cardmarket.com/fr/Pokemon/Products/Search?searchString=${encodeURIComponent(q)}`;
 }
 
-function renderCard(card, isBest) {
+// Bloc (série) d'un set : la fiche d'une carte ne le donne pas, on le lit sur la fiche du set.
+const serieCache = {};
+function getSerie(lang, setId) {
+  const key = `${lang}/${setId}`;
+  serieCache[key] ??= getJson(`${API}/${lang}/sets/${encodeURIComponent(setId)}`)
+    .then((set) => set?.serie || null)
+    .catch(() => { delete serieCache[key]; return null; });
+  return serieCache[key];
+}
+
+// lang : langue de la carte ; si fournie, affiche son bloc et son set (Détecteur).
+function renderCard(card, isBest, lang) {
   const cm = card.pricing?.cardmarket;
   const hasHolo = cm && (cm['trend-holo'] || cm['avg-holo']);
   const mainPrice = cm ? (cm.trend || cm.avg30 || cm.avg || cm['trend-holo'] || cm['avg-holo']) : null;
@@ -743,13 +756,29 @@ function renderCard(card, isBest) {
     <div class="info">
       <h3>${escapeHtml(card.name)}${isBest ? '<span class="badge">Meilleure correspondance</span>' : ''}</h3>
       <p class="meta">${escapeHtml(card.set?.name || '')} · n° ${escapeHtml(card.localId)}${setTotal ? '/' + setTotal : ''}${card.rarity ? ' · ' + escapeHtml(card.rarity) : ''}</p>
+      ${lang && card.set?.id ? `
+      <dl class="bloc-set">
+        <dt>Bloc</dt><dd class="bloc-name">…</dd>
+        <dt>Set</dt><dd>${escapeHtml(card.set.name || card.set.id)}
+          <a href="#set/${encodeURIComponent(card.set.id)}" class="open-set" data-lang="${escapeHtml(lang)}">voir le set ›</a></dd>
+      </dl>` : ''}
       ${prices}
       <div class="actions">
         <a class="button secondary" href="${cardmarketUrl(card)}" target="_blank" rel="noopener">Voir sur Cardmarket</a>
       </div>
     </div>`;
+  const blocEl = el.querySelector('.bloc-name');
+  if (blocEl) {
+    getSerie(lang, card.set.id).then((serie) => { blocEl.textContent = serie?.name || 'inconnu'; });
+  }
   return el;
 }
+
+// « voir le set » : ouvre la rubrique Sets dans la langue de la carte.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a.open-set');
+  if (a) try { localStorage.setItem('setsLang', a.dataset.lang); } catch { /* stockage indisponible */ }
+});
 
 /* ---------- Navigation entre l'accueil et les rubriques ---------- */
 
