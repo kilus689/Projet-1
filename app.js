@@ -412,9 +412,14 @@ function findNumber(text) {
 
 // Parmi plusieurs lectures, préfère un numéro écrit sur autant de chiffres que le total
 // (les cartes récentes impriment « 059/103 ») : « 05/103 » est alors un chiffre manqué.
+function isPadded(reading) {
+  const [a, b] = (reading || '').split('/');
+  return Boolean(a && b && a.length === b.length);
+}
+
 function pickNumber(readings) {
   const valid = readings.filter(Boolean);
-  const padded = valid.find((r) => { const [a, b] = r.split('/'); return a.length === b.length; });
+  const padded = valid.find(isPadded);
   return padded || valid.sort((a, b) => b.length - a.length)[0] || '';
 }
 
@@ -479,7 +484,7 @@ async function analyzeWithOcr() {
     for (const bin of [false, true]) {
       readings.push(findNumber((await numWorker.recognize(cropRegion(card, x, y, w, h, 260, bin))).data.text));
     }
-    if (pickNumber(readings).split('/').every((p, _, a) => p.length === a[1].length)) break;
+    if (isPadded(pickNumber(readings))) break; // lecture complète (ex : 059/103) : inutile d'insister
   }
   const number = pickNumber(readings);
 
