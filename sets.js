@@ -14,6 +14,18 @@ const Sets = (() => {
     modal: $('card-modal'), modalBody: $('card-modal-body'), modalClose: $('card-modal-close'),
   };
 
+  // Blocs retirés de la liste : Pokémon TCG Pocket, McDonald's, Kits du Dresseur, POP, Divers.
+  const HIDDEN_SERIES = new Set(['tcgp', 'mc', 'tk', 'pop', 'misc']);
+  const HIDDEN_RE = /pocket|mcdonald|kits? du dresseur|trainer kits?|^pop\b|divers|misc|ポケポケ/i;
+  const isHidden = (x) => HIDDEN_SERIES.has(x.id) || HIDDEN_RE.test(x.name || '');
+
+  // Sets de cartes promo (ex : « Promos Écarlate et Violet », id « svp »).
+  const isPromo = (s) => /promo/i.test(s.name || '') || /^[a-z]+p$/i.test(s.id || '') || /プロモ/.test(s.name || '');
+  const PROMO_LOGO = '<img class="LOGOCLASS promo-logo" src="img/promo.svg" alt="Cartes promo">';
+  const setLogo = (s, cls) => isPromo(s)
+    ? PROMO_LOGO.replace('LOGOCLASS', cls)
+    : logoImg(s.logo, cls, s.name) || logoImg(s.symbol, 'set-symbol', s.name);
+
   function getLang() {
     try { return localStorage.getItem(LANG_KEY) || 'fr'; } catch { return 'fr'; }
   }
@@ -38,7 +50,9 @@ const Sets = (() => {
       getJson(`${API}/${lang}/series/${encodeURIComponent(s.id)}`).catch(() => null)));
     const series = details
       .map((d, i) => d && { ...d, order: i })
-      .filter((d) => d && d.sets?.length);
+      .filter((d) => d && !isHidden(d))
+      .map((d) => ({ ...d, sets: (d.sets || []).filter((x) => !isHidden(x)) }))
+      .filter((d) => d.sets.length);
     // Du bloc le plus récent au plus ancien (date de sortie si connue, sinon ordre de l'API).
     series.sort((a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || '') || b.order - a.order);
     cache[lang] = series;
@@ -76,7 +90,7 @@ const Sets = (() => {
       <div class="set-grid">
         ${sets.map((s) => `
           <a class="set-tile" href="#set/${encodeURIComponent(s.id)}">
-            <span class="set-logo-wrap">${logoImg(s.logo, 'set-logo', s.name) || logoImg(s.symbol, 'set-symbol', s.name)}</span>
+            <span class="set-logo-wrap">${setLogo(s, 'set-logo')}</span>
             <span class="set-name">${escapeHtml(s.name)}</span>
             <small>${s.cardCount?.official ? s.cardCount.official + ' cartes' : ''}</small>
           </a>`).join('')}
@@ -96,7 +110,7 @@ const Sets = (() => {
       const count = set.cardCount?.official;
       const extra = set.cardCount?.total > count ? ` (+${set.cardCount.total - count} secrètes)` : '';
       ui.setHeader.innerHTML = `
-        ${logoImg(set.logo, 'set-header-logo', set.name)}
+        ${setLogo(set, 'set-header-logo')}
         <h3>${escapeHtml(set.name)}</h3>
         <p class="meta">${escapeHtml(set.serie?.name || '')}${set.releaseDate ? ' · ' + formatDate(set.releaseDate) : ''}${count ? ' · ' + count + ' cartes' + extra : ''}</p>`;
       const cards = set.cards || [];

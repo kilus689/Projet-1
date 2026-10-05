@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <!-- Étoile noire des cartes promo -->
+  <path d="M60 6 L74.5 41 L112 43.5 L83 67.5 L92.5 104 L60 83.5 L27.5 104 L37 67.5 L8 43.5 L45.5 41 Z"
+        fill="#111" stroke="#d9d9d9" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M60 18 L71 44.5 L99 46.5 L77.5 64.5 L84.5 92 L60 76.5 L35.5 92 L42.5 64.5 L21 46.5 L49 44.5 Z"
+        fill="none" stroke="#555" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="22" y="56" width="76" height="20" rx="4" fill="#e3350d" stroke="#fff" stroke-width="2"/>
+  <text x="60" y="71" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900"
+        font-size="14" fill="#fff" letter-spacing=".5">PROMO</text>
+</svg>

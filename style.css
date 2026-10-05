@@ -255,3 +255,5 @@ img.zoomable { cursor: zoom-in; }
 .lightbox[hidden] { display: none; }
 .lightbox img { width: min(100%, calc((100vh - 70px) * 63 / 88)); height: auto; object-fit: contain; border-radius: 14px; }
 .lightbox-hint { color: #aaa; font-size: .85rem; margin: 0; }
+.set-logo.promo-logo { height: 56px; }
+.set-header-logo.promo-logo { height: 90px; }
