@@ -1,30 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
-  <!-- Logo du 30e anniversaire : Pikachu avec 3 et 0 sur les joues -->
-  <!-- Oreilles (bout noir découpé dans la forme de l'oreille) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 116">
+  <!-- Logo du 30e anniversaire : silhouette de tête de Pikachu, « 3 » et « 0 » rouges sur les joues -->
   <defs>
-    <clipPath id="earL"><path d="M36 50 C22 34 14 18 12 4 C26 10 40 24 50 42 Z"/></clipPath>
-    <clipPath id="earR"><path d="M84 50 C98 34 106 18 108 4 C94 10 80 24 70 42 Z"/></clipPath>
+    <clipPath id="earL"><path d="M22 62 C14 42 6 22 3 2 C22 8 42 22 56 42 Z"/></clipPath>
+    <clipPath id="earR"><path d="M98 62 C106 42 114 22 117 2 C98 8 78 22 64 42 Z"/></clipPath>
   </defs>
-  <path d="M36 50 C22 34 14 18 12 4 C26 10 40 24 50 42 Z" fill="#ffd733"/>
-  <path d="M0 0 H40 L18 26 L0 22 Z" fill="#2b2b2b" clip-path="url(#earL)"/>
-  <path d="M36 50 C22 34 14 18 12 4 C26 10 40 24 50 42 Z" fill="none" stroke="#3a2a00" stroke-width="2.5" stroke-linejoin="round"/>
-  <path d="M84 50 C98 34 106 18 108 4 C94 10 80 24 70 42 Z" fill="#ffd733"/>
-  <path d="M120 0 H80 L102 26 L120 22 Z" fill="#2b2b2b" clip-path="url(#earR)"/>
-  <path d="M84 50 C98 34 106 18 108 4 C94 10 80 24 70 42 Z" fill="none" stroke="#3a2a00" stroke-width="2.5" stroke-linejoin="round"/>
-  <!-- Grosse tête -->
-  <ellipse cx="60" cy="76" rx="48" ry="40" fill="#ffd733" stroke="#3a2a00" stroke-width="2.5"/>
-  <ellipse cx="60" cy="62" rx="34" ry="14" fill="#ffe56b" opacity=".7"/>
-  <!-- Yeux -->
-  <ellipse cx="41" cy="72" rx="8" ry="9.5" fill="#1d1d1d"/>
-  <ellipse cx="79" cy="72" rx="8" ry="9.5" fill="#1d1d1d"/>
-  <circle cx="43.5" cy="68.5" r="3.4" fill="#fff"/>
-  <circle cx="81.5" cy="68.5" r="3.4" fill="#fff"/>
-  <!-- Joues -->
-  <circle cx="23" cy="90" r="13" fill="#f0473b"/>
-  <circle cx="97" cy="90" r="13" fill="#f0473b"/>
-  <text x="23" y="97.5" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="20" fill="#ffd733">3</text>
-  <text x="97" y="97.5" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="20" fill="#ffd733">0</text>
-  <!-- Nez et bouche -->
-  <path d="M57.5 80 L62.5 80 L60 83 Z" fill="#1d1d1d"/>
-  <path d="M51 88 Q55.5 93 60 88 Q64.5 93 69 88" fill="none" stroke="#1d1d1d" stroke-width="2.2" stroke-linecap="round"/>
+  <g stroke="#e0b400" stroke-width="1.5" stroke-linejoin="round">
+    <path d="M22 62 C14 42 6 22 3 2 C22 8 42 22 56 42 Z" fill="#ffd400"/>
+    <path d="M98 62 C106 42 114 22 117 2 C98 8 78 22 64 42 Z" fill="#ffd400"/>
+    <path d="M16 64 C16 42 38 34 60 34 C82 34 104 42 104 64 C114 78 112 96 99 106 C87 114 72 110 60 112 C48 110 33 114 21 106 C8 96 6 78 16 64 Z" fill="#ffd400"/>
+  </g>
+  <!-- Bouts noirs des oreilles -->
+  <rect x="0" y="0" width="44" height="22" fill="#1d1d1d" clip-path="url(#earL)"/>
+  <rect x="76" y="0" width="44" height="22" fill="#1d1d1d" clip-path="url(#earR)"/>
+  <!-- 3 et 0 -->
+  <text x="33" y="99" text-anchor="middle" font-family="Arial Rounded MT Bold, Arial Black, Arial, sans-serif" font-weight="900" font-size="27" fill="#e1251b">3</text>
+  <text x="87" y="99" text-anchor="middle" font-family="Arial Rounded MT Bold, Arial Black, Arial, sans-serif" font-weight="900" font-size="27" fill="#e1251b">0</text>
 </svg>
