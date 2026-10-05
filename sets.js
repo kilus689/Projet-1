@@ -22,8 +22,11 @@ const Sets = (() => {
   // Sets de cartes promo (ex : « Promos Écarlate et Violet », id « svp »).
   const isPromo = (s) => /promo/i.test(s.name || '') || /^[a-z]+p$/i.test(s.id || '') || /プロモ/.test(s.name || '');
   const PROMO_LOGO = '<img class="LOGOCLASS promo-logo" src="img/promo.svg" alt="Cartes promo">';
-  const setLogo = (s, cls) => isPromo(s)
-    ? PROMO_LOGO.replace('LOGOCLASS', cls)
+  // Sets d'énergies (ex : « Énergies Écarlate et Violet », id « sve »).
+  const isEnergy = (s) => /[ée]nergie|energy|エネルギー/i.test(s.name || '') || ['sve', 'mee'].includes(s.id);
+  const ENERGY_LOGO = '<img class="LOGOCLASS energy-logo" src="img/energie-feu.svg" alt="Énergie Feu">';
+  const setLogo = (s, cls) => isPromo(s) ? PROMO_LOGO.replace('LOGOCLASS', cls)
+    : isEnergy(s) ? ENERGY_LOGO.replace('LOGOCLASS', cls)
     : logoImg(s.logo, cls, s.name) || logoImg(s.symbol, 'set-symbol', s.name);
 
   function getLang() {

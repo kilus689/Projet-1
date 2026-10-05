@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <!-- Symbole de l'Énergie Feu -->
+  <defs>
+    <radialGradient id="g" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#ff7a45"/>
+      <stop offset="1" stop-color="#d4200f"/>
+    </radialGradient>
+  </defs>
+  <circle cx="60" cy="60" r="54" fill="#fff" stroke="#9a9a9a" stroke-width="2"/>
+  <circle cx="60" cy="60" r="47" fill="url(#g)"/>
+  <path d="M60 18
+           C66 32 82 40 82 62
+           C82 78 72 92 60 92
+           C48 92 38 82 38 68
+           C38 56 46 50 48 40
+           C52 46 54 52 54 58
+           C58 50 60 40 60 18 Z"
+        fill="#fff"/>
+  <path d="M60 60 C64 66 70 70 70 78 C70 85 65 90 60 90 C55 90 50 85 50 79 C50 72 56 68 60 60 Z" fill="#ff5a2a"/>
+</svg>
