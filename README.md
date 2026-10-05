@@ -2,8 +2,11 @@
 
 Application web pour les cartes Pokémon. L'accueil présente les rubriques :
 
-- **🔍 Détecteur** : on prend en photo une carte Pokémon (recto, et verso en option)
+- **$ Détecteur** : on prend en photo une carte Pokémon (recto, et verso en option)
   et elle affiche son prix sur **Cardmarket**, ajusté selon l'état de la carte.
+- **🗂️ Sets** : tous les sets Pokémon rangés par bloc (Méga-Évolution, Écarlate et Violet,
+  Épée et Bouclier…), du plus récent au plus ancien, en français, anglais ou japonais.
+  Toucher un set affiche ses cartes ; toucher une carte affiche son prix Cardmarket.
 
 D'autres rubriques viendront s'ajouter au menu d'accueil.
 

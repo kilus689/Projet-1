@@ -753,12 +753,17 @@ function renderCard(card, isBest) {
 
 /* ---------- Navigation entre l'accueil et les rubriques ---------- */
 
-const VIEWS = { '': 'view-home', '#accueil': 'view-home', '#detecteur': 'view-detecteur' };
+const VIEWS = { '': 'view-home', '#accueil': 'view-home', '#detecteur': 'view-detecteur', '#sets': 'view-sets' };
 
 function showView() {
-  const target = VIEWS[location.hash] || 'view-home';
+  const hash = location.hash;
+  let target = VIEWS[hash] || 'view-home';
+  if (hash.startsWith('#set/')) target = 'view-set';
   document.querySelectorAll('.view').forEach((v) => { v.hidden = v.id !== target; });
+  document.getElementById('card-modal').hidden = true;
   window.scrollTo(0, 0);
+  if (target === 'view-sets') Sets.showSeries();
+  if (target === 'view-set') Sets.showSet(decodeURIComponent(hash.slice(5)));
 }
 window.addEventListener('hashchange', showView);
 showView();

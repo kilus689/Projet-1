@@ -9,9 +9,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="img/icon-180.png" type="image/png">
   <link rel="apple-touch-icon" href="img/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=18">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="app.js?v=17" defer></script>
+  <script src="sets.js?v=18" defer></script>
+  <script src="app.js?v=18" defer></script>
 </head>
 <body>
   <!-- Accueil -->
@@ -27,6 +28,12 @@
         <span class="menu-icon dollar">$</span>
         <span class="menu-text"><strong>Détecteur</strong>
           <small>Prends une carte en photo et découvre son prix sur Cardmarket</small></span>
+        <span class="menu-arrow">›</span>
+      </a>
+      <a class="menu-item" href="#sets">
+        <span class="menu-icon">🗂️</span>
+        <span class="menu-text"><strong>Sets</strong>
+          <small>Tous les sets Pokémon, rangés par bloc, avec leurs cartes et leurs prix</small></span>
         <span class="menu-arrow">›</span>
       </a>
     </nav>
@@ -129,6 +136,49 @@
     Les prix sont indicatifs et mis à jour environ une fois par jour.
     Le prix selon l'état est une estimation.
   </footer>
+  </div>
+
+  <!-- Sets : liste des blocs -->
+  <div id="view-sets" class="view" hidden>
+    <header class="topbar">
+      <a href="#accueil" class="back">‹ Accueil</a>
+      <h2>🗂️ Sets</h2>
+      <span class="topbar-spacer"></span>
+    </header>
+    <main>
+      <div class="card-box sets-toolbar">
+        <label>Langue des cartes
+          <select id="sets-lang">
+            <option value="fr">Français</option>
+            <option value="en">Anglais</option>
+            <option value="ja">Japonais</option>
+          </select>
+        </label>
+      </div>
+      <p id="sets-status" class="status" aria-live="polite"></p>
+      <div id="series-list"></div>
+    </main>
+  </div>
+
+  <!-- Sets : cartes d'un set -->
+  <div id="view-set" class="view" hidden>
+    <header class="topbar">
+      <a href="#sets" class="back">‹ Sets</a>
+      <h2>🗂️ Set</h2>
+      <span class="topbar-spacer"></span>
+    </header>
+    <main>
+      <div id="set-header" class="card-box set-header"></div>
+      <p id="set-status" class="status" aria-live="polite"></p>
+      <div id="set-cards" class="card-grid"></div>
+    </main>
+  </div>
+
+  <div id="card-modal" class="modal" hidden>
+    <div class="modal-box">
+      <button id="card-modal-close" type="button" class="modal-close" aria-label="Fermer">✕</button>
+      <div id="card-modal-body"></div>
+    </div>
   </div>
 
   <div id="camera" class="camera" hidden>
