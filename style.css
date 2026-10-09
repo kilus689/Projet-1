@@ -268,3 +268,12 @@ img.zoomable { cursor: zoom-in; }
 .bloc-set dt { color: var(--muted); }
 .bloc-set dd { margin: 0; font-weight: 600; }
 .open-set { font-weight: 400; font-size: .8rem; color: var(--accent); margin-left: 6px; white-space: nowrap; }
+
+/* ---------- Images manquantes ---------- */
+img.placeholder { cursor: default; }
+.result img.placeholder { width: 110px; aspect-ratio: 63 / 88; }
+.notice { display: block; padding: 10px 12px; border-radius: 10px; background: #fff4d6; color: #6b4e00; border: 1px solid #f1d58a; }
+@media (prefers-color-scheme: dark) { .notice { background: #3a3014; color: #f3dc9a; border-color: #6b5718; } }
+.notice-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.notice-actions .button, .notice-actions button { flex: 0 1 auto; padding: 8px 12px; font-size: .9rem; text-decoration: none; }
+.set-header:empty { display: none; }

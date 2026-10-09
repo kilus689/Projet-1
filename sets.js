@@ -26,7 +26,8 @@ const Sets = (() => {
   const isEnergy = (s) => /[ée]nergie|energy|エネルギー/i.test(s.name || '') || ['sve', 'mee'].includes(s.id);
   const ENERGY_LOGO = '<img class="LOGOCLASS energy-logo" src="img/energie-feu.svg?v=2" alt="Énergie Feu">';
   // Sets du 30e anniversaire.
-  const isAnniv30 = (s) => /anniversaire|anniversary|30\s*(e|ème|th)?\s*(c[ée]l[ée]bration)|周年/i.test(s.name || '');
+  // (« 30ᵉ Anniversaire », « Collection Classique 30ᵉ Anniversaire », « 30th Classic Collection », « 30th CELEBRATION »…)
+  const isAnniv30 = (s) => /anniversa|30\s*(?:th|ᵉ|ème|e)(?![a-z])|周年/i.test(s.name || '') || /^30th/.test(s.id || '');
   const ANNIV_LOGO = '<img class="LOGOCLASS anniv-logo" src="img/anniv30.png?v=3" alt="30e anniversaire">';
   const setLogo = (s, cls) => isAnniv30(s) ? ANNIV_LOGO.replace('LOGOCLASS', cls)
     : isPromo(s) ? PROMO_LOGO.replace('LOGOCLASS', cls)
@@ -105,32 +106,78 @@ const Sets = (() => {
     return el;
   }
 
+  const LANG_NAMES = { fr: 'Français', en: 'Anglais', ja: 'Japonais' };
+  let missingHandler = null; // écoute les images de cartes qui échouent au chargement
+
+  function setNotice(html) {
+    ui.setStatus.classList.remove('error');
+    ui.setStatus.innerHTML = html;
+  }
+
   async function showSet(id) {
     const lang = getLang();
     ui.setHeader.innerHTML = '';
     ui.cards.innerHTML = '';
-    ui.setStatus.textContent = 'Chargement du set…';
-    ui.setStatus.classList.remove('error');
+    setNotice('Chargement du set…');
+    let set;
     try {
-      const set = await getJson(`${API}/${lang}/sets/${encodeURIComponent(id)}`);
-      if (!set) throw new Error('set introuvable');
-      const count = set.cardCount?.official;
-      const extra = set.cardCount?.total > count ? ` (+${set.cardCount.total - count} secrètes)` : '';
-      ui.setHeader.innerHTML = `
-        ${setLogo(set, 'set-header-logo')}
-        <h3>${escapeHtml(set.name)}</h3>
-        <p class="meta">${escapeHtml(set.serie?.name || '')}${set.releaseDate ? ' · ' + formatDate(set.releaseDate) : ''}${count ? ' · ' + count + ' cartes' + extra : ''}</p>`;
-      const cards = set.cards || [];
-      ui.setStatus.textContent = cards.length ? 'Touche une carte pour voir son prix.' : 'Aucune carte listée pour ce set.';
-      ui.cards.innerHTML = cards.map((c) => `
-        <button type="button" class="card-thumb" data-id="${escapeHtml(c.id)}">
-          ${c.image ? `<img src="${escapeHtml(c.image)}/low.webp" alt="${escapeHtml(c.name)}" loading="lazy">` : '<span class="no-img">?</span>'}
-          <span>${escapeHtml(c.localId)} · ${escapeHtml(c.name)}</span>
-        </button>`).join('');
+      set = await getJson(`${API}/${lang}/sets/${encodeURIComponent(id)}`);
     } catch (err) {
       ui.setStatus.textContent = 'Impossible de charger ce set : ' + err.message;
       ui.setStatus.classList.add('error');
+      return;
     }
+
+    // Set absent de la base dans cette langue (ex : la Collection Classique n'existe pas en japonais).
+    if (!set) {
+      const others = Object.keys(LANG_NAMES).filter((l) => l !== lang);
+      setNotice(`<span class="notice">Ce set n'existe pas dans la base de cartes en <strong>${LANG_NAMES[lang] || lang}</strong>.
+        Certains sets ne sortent que dans certaines langues : par exemple, la Collection Classique 30ᵉ Anniversaire
+        n'existe pas en japonais, et le set japonais « 30th CELEBRATION » a un autre identifiant que la version française.</span>
+        <span class="notice-actions">${others.map((l) => `<button type="button" class="secondary switch-lang" data-lang="${l}">Essayer en ${LANG_NAMES[l]}</button>`).join('')}</span>`);
+      return;
+    }
+
+    const count = set.cardCount?.official;
+    const extra = set.cardCount?.total > count ? ` (+${set.cardCount.total - count} secrètes)` : '';
+    ui.setHeader.innerHTML = `
+      ${setLogo(set, 'set-header-logo')}
+      <h3>${escapeHtml(set.name)}</h3>
+      <p class="meta">${escapeHtml(set.serie?.name || '')}${set.releaseDate ? ' · ' + formatDate(set.releaseDate) : ''}${count ? ' · ' + count + ' cartes' + extra : ''}</p>`;
+
+    const cards = set.cards || [];
+    if (!cards.length) {
+      setNotice(`<span class="notice">Les cartes de ce set ne sont pas encore listées dans la base de cartes (TCGdex)${set.releaseDate ? `, le set étant sorti en ${formatDate(set.releaseDate)}` : ''}.
+        Elles s'afficheront ici automatiquement dès qu'elles seront ajoutées.</span>
+        <span class="notice-actions"><a class="button secondary" target="_blank" rel="noopener"
+          href="https://www.cardmarket.com/fr/Pokemon/Products/Search?searchString=${encodeURIComponent(set.name)}">Voir ce set sur Cardmarket</a></span>`);
+      return;
+    }
+
+    ui.cards.innerHTML = cards.map((c) => `
+      <button type="button" class="card-thumb" data-id="${escapeHtml(c.id)}">
+        ${cardImgHtml(c)}
+        <span>${escapeHtml(c.localId)} · ${escapeHtml(c.name)}</span>
+      </button>`).join('');
+
+    // Compte les images manquantes : absentes d'office, ou qui échouent au chargement.
+    const missing = new Set(cards.filter((c) => !c.image).map((c) => c.id));
+    const update = () => {
+      const tip = 'Touche une carte pour voir son prix.';
+      if (!missing.size) return setNotice(tip);
+      const all = missing.size === cards.length;
+      setNotice(`<span class="notice">${all ? "Les images de ce set ne sont pas encore disponibles"
+        : `${missing.size} carte${missing.size > 1 ? 's' : ''} sur ${cards.length} n'${missing.size > 1 ? 'ont' : 'a'} pas encore d'image`}
+        dans la base de cartes (TCGdex)${set.releaseDate ? `, le set étant sorti en ${formatDate(set.releaseDate)}` : ''}.
+        Elles s'afficheront automatiquement dès qu'elles seront ajoutées. ${tip}</span>`);
+    };
+    if (missingHandler) ui.cards.removeEventListener('cardimgmissing', missingHandler);
+    missingHandler = (e) => {
+      const id = e.target.closest('.card-thumb')?.dataset.id;
+      if (id) { missing.add(id); update(); }
+    };
+    ui.cards.addEventListener('cardimgmissing', missingHandler);
+    update();
   }
 
   async function openCard(id) {
@@ -154,6 +201,12 @@ const Sets = (() => {
   ui.cards.addEventListener('click', (e) => {
     const btn = e.target.closest('.card-thumb');
     if (btn) openCard(btn.dataset.id);
+  });
+  ui.setStatus.addEventListener('click', (e) => {
+    const btn = e.target.closest('.switch-lang');
+    if (!btn) return;
+    try { localStorage.setItem(LANG_KEY, btn.dataset.lang); } catch { /* stockage indisponible */ }
+    showSet(decodeURIComponent(location.hash.slice(5)));
   });
   ui.modalClose.addEventListener('click', () => { ui.modal.hidden = true; });
   ui.modal.addEventListener('click', (e) => { if (e.target === ui.modal) ui.modal.hidden = true; });

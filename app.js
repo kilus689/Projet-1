@@ -718,6 +718,25 @@ function cardmarketUrl(card) {
   return `https://www.cardmarket.com/fr/Pokemon/Products/Search?searchString=${encodeURIComponent(q)}`;
 }
 
+// Image d'une carte. Les sets tout récents n'ont pas toujours d'image dans TCGdex : soit l'adresse
+// manque, soit elle est donnée mais le fichier n'existe pas encore (ex : set « 30th »).
+// Dans les deux cas on affiche une image de remplacement.
+const CARD_PLACEHOLDER = 'img/carte-indisponible.svg?v=1';
+function cardImgHtml(card, cls = '', zoom = false) {
+  const alt = escapeHtml(card.name || '');
+  if (!card.image) return `<img class="${cls} placeholder" src="${CARD_PLACEHOLDER}" alt="${alt} (image indisponible)">`;
+  const base = escapeHtml(card.image);
+  return `<img class="${cls}${zoom ? ' zoomable' : ''}" src="${base}/low.webp" ${zoom ? `data-full="${base}/high.webp" title="Toucher pour agrandir"` : ''}
+    alt="${alt}" loading="lazy" onerror="cardImgFailed(this)">`;
+}
+function cardImgFailed(img) {
+  img.onerror = null;
+  img.src = CARD_PLACEHOLDER;
+  img.classList.remove('zoomable');
+  img.classList.add('placeholder');
+  img.dispatchEvent(new CustomEvent('cardimgmissing', { bubbles: true }));
+}
+
 // Bloc (série) d'un set : la fiche d'une carte ne le donne pas, on le lit sur la fiche du set.
 const serieCache = {};
 function getSerie(lang, setId) {
@@ -757,7 +776,7 @@ function renderCard(card, isBest, lang) {
   const el = document.createElement('article');
   el.className = 'result' + (isBest ? ' best' : '');
   el.innerHTML = `
-    ${card.image ? `<img class="zoomable" src="${escapeHtml(card.image)}/low.webp" data-full="${escapeHtml(card.image)}/high.webp" alt="${escapeHtml(card.name)}" loading="lazy" title="Toucher pour agrandir">` : ''}
+    ${cardImgHtml(card, '', true)}
     <div class="info">
       <h3>${escapeHtml(card.name)}${isBest ? '<span class="badge">Meilleure correspondance</span>' : ''}</h3>
       <p class="meta">${escapeHtml(card.set?.name || '')} · n° ${escapeHtml(card.localId)}${setTotal ? '/' + setTotal : ''}${card.rarity ? ' · ' + escapeHtml(card.rarity) : ''}</p>
