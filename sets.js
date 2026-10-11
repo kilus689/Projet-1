@@ -108,6 +108,7 @@ const Sets = (() => {
 
   const LANG_NAMES = { fr: 'Français', en: 'Anglais', ja: 'Japonais' };
   let missingHandler = null; // écoute les images de cartes qui échouent au chargement
+  let currentSerieId = null; // bloc du set affiché (pour l'image anglaise de secours)
 
   function setNotice(html) {
     ui.setStatus.classList.remove('error');
@@ -154,14 +155,15 @@ const Sets = (() => {
       return;
     }
 
+    currentSerieId = set.serie?.id;
     ui.cards.innerHTML = cards.map((c) => `
       <button type="button" class="card-thumb" data-id="${escapeHtml(c.id)}">
-        ${cardImgHtml(c)}
+        ${cardImgHtml(c, '', false, imageSources(c, lang, currentSerieId))}
         <span>${escapeHtml(c.localId)} · ${escapeHtml(c.name)}</span>
       </button>`).join('');
 
     // Compte les images manquantes : absentes d'office, ou qui échouent au chargement.
-    const missing = new Set(cards.filter((c) => !c.image).map((c) => c.id));
+    const missing = new Set(cards.filter((c) => !imageSources(c, lang, currentSerieId).length).map((c) => c.id));
     const update = () => {
       const tip = 'Touche une carte pour voir son prix.';
       if (!missing.size) return setNotice(tip);
@@ -188,7 +190,7 @@ const Sets = (() => {
       if (!card) throw new Error('carte introuvable');
       englishName = ''; // pas de nom anglais connu ici (utilisé par le lien Cardmarket)
       ui.modalBody.innerHTML = '';
-      ui.modalBody.appendChild(renderCard(card, false));
+      ui.modalBody.appendChild(renderCard(card, false, { lang: getLang(), serieId: currentSerieId }));
     } catch (err) {
       ui.modalBody.innerHTML = `<p class="status error">Impossible de charger cette carte : ${escapeHtml(err.message)}</p>`;
     }

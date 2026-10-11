@@ -27,8 +27,20 @@ D'autres rubriques viendront s'ajouter au menu d'accueil.
      et l'état se choisit à la main.
 3. **Identification** : la carte est recherchée dans l'API gratuite [TCGdex](https://tcgdex.dev).
    Le numéro, le nombre de cartes de l'extension et le code d'extension départagent les versions.
-4. **Prix** : TCGdex fournit les prix Cardmarket (tendance, moyennes 7 j / 30 j, prix le plus bas,
-   versions holo/reverse). Un bouton ouvre la recherche sur Cardmarket pour vérifier.
+4. **Prix** : TCGdex fournit les prix Cardmarket (tendance, moyennes 7 j / 30 j, prix le plus bas),
+   ainsi qu'un **prix par version** quand une carte en a plusieurs (normale, reverse, holo,
+   tampon 30ᵉ anniversaire…). Un bouton ouvre la recherche sur Cardmarket pour vérifier.
+
+## Données et mises à jour
+
+Les prix et les images ne sont pas stockés dans l'app : ils sont lus **en direct** dans TCGdex
+à chaque recherche. Dès que TCGdex ajoute une image ou met à jour un prix (environ une fois par
+jour pour les prix), l'app l'affiche, sans mise à jour du logiciel.
+
+- Si l'image d'une carte n'existe pas encore dans la langue choisie, l'app essaie l'image de la
+  version anglaise, puis affiche une image de remplacement « Image bientôt disponible ».
+- Les sets très récents (ex : sets du 30ᵉ anniversaire, sortis le 16/09/2026) peuvent avoir des
+  images manquantes quelque temps : c'est la base TCGdex qui doit les ajouter.
 
 Le nom, le numéro, la langue et l'état restent modifiables à la main.
 

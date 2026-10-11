@@ -709,7 +709,7 @@ function renderMissing(names, num, total, hasOthers) {
 function renderResults() {
   els.results.innerHTML = '';
   if (missingBox) els.results.appendChild(missingBox);
-  shown.forEach(({ card, best }) => els.results.appendChild(renderCard(card, best, shownLang)));
+  shown.forEach(({ card, best }) => els.results.appendChild(renderCard(card, best, { lang: shownLang, showSet: true })));
 }
 
 function cardmarketUrl(card) {
@@ -722,19 +722,77 @@ function cardmarketUrl(card) {
 // manque, soit elle est donnée mais le fichier n'existe pas encore (ex : set « 30th »).
 // Dans les deux cas on affiche une image de remplacement.
 const CARD_PLACEHOLDER = 'img/carte-indisponible.svg?v=1';
-function cardImgHtml(card, cls = '', zoom = false) {
-  const alt = escapeHtml(card.name || '');
-  if (!card.image) return `<img class="${cls} placeholder" src="${CARD_PLACEHOLDER}" alt="${alt} (image indisponible)">`;
-  const base = escapeHtml(card.image);
-  return `<img class="${cls}${zoom ? ' zoomable' : ''}" src="${base}/low.webp" ${zoom ? `data-full="${base}/high.webp" title="Toucher pour agrandir"` : ''}
-    alt="${alt}" loading="lazy" onerror="cardImgFailed(this)">`;
+// Adresses d'image à essayer : celle donnée par TCGdex, puis la même carte en anglais
+// (souvent publiée avant les autres langues). Pas de secours pour le japonais (autres sets).
+function imageSources(card, lang, serieId) {
+  const list = card.image ? [card.image] : [];
+  const setId = card.set?.id || (card.id ? card.id.slice(0, card.id.lastIndexOf('-')) : '');
+  if (lang && !['en', 'ja'].includes(lang) && serieId && setId && card.localId) {
+    list.push(`https://assets.tcgdex.net/en/${serieId}/${setId}/${card.localId}`);
+  }
+  return [...new Set(list)];
 }
+
+function cardImgHtml(card, cls = '', zoom = false, sources = imageSources(card)) {
+  const alt = escapeHtml(card.name || '');
+  if (!sources.length) return `<img class="${cls} placeholder" src="${CARD_PLACEHOLDER}" alt="${alt} (image indisponible)">`;
+  const [first, ...rest] = sources.map(escapeHtml);
+  return `<img class="${cls}${zoom ? ' zoomable' : ''}" src="${first}/low.webp" data-sources="${rest.join('|')}"
+    ${zoom ? `data-full="${first}/high.webp" title="Toucher pour agrandir"` : ''} alt="${alt}" loading="lazy" onerror="cardImgFailed(this)">`;
+}
+
+// Image en échec : on passe à l'adresse suivante, sinon à l'image de remplacement.
 function cardImgFailed(img) {
+  const rest = (img.dataset.sources || '').split('|').filter(Boolean);
+  if (rest.length) {
+    const next = rest.shift();
+    img.dataset.sources = rest.join('|');
+    img.title = 'Image de la version anglaise (pas encore disponible dans cette langue)';
+    if (img.dataset.full) img.dataset.full = `${next}/high.webp`;
+    img.src = `${next}/low.webp`;
+    return;
+  }
   img.onerror = null;
   img.src = CARD_PLACEHOLDER;
   img.classList.remove('zoomable');
   img.classList.add('placeholder');
   img.dispatchEvent(new CustomEvent('cardimgmissing', { bubbles: true }));
+}
+
+// Ajoute une adresse de secours connue plus tard (le bloc est chargé à part).
+function addImgFallback(img, url) {
+  if (img.classList.contains('placeholder')) {
+    img.classList.remove('placeholder');
+    img.onerror = () => cardImgFailed(img);
+    img.dataset.sources = '';
+    if (img.closest('.result')) { img.classList.add('zoomable'); img.dataset.full = `${url}/high.webp`; }
+    img.title = 'Image de la version anglaise (pas encore disponible dans cette langue)';
+    img.src = `${url}/low.webp`;
+  } else {
+    img.dataset.sources = [...(img.dataset.sources || '').split('|').filter(Boolean), url].join('|');
+  }
+}
+
+// ---------- Prix par version (normale, reverse, holo, tampon…) ----------
+const VARIANT_TYPES = { normal: 'Normale', reverse: 'Reverse', holo: 'Holo', firstEdition: '1ʳᵉ édition', '1st-edition': '1ʳᵉ édition' };
+const VARIANT_STAMPS = {
+  '30th-anniversary': 'tampon 30ᵉ anniversaire', 'pokemon-center': 'tampon Pokémon Center',
+  prerelease: 'avant-première', staff: 'Staff', 'set-logo': 'logo du set',
+};
+function variantLabel(v) {
+  const parts = [VARIANT_TYPES[v.type] || (v.type ? v.type[0].toUpperCase() + v.type.slice(1) : 'Version')];
+  if (v.foil) parts.push(v.foil.replace(/-/g, ' '));
+  (v.stamp || []).forEach((st) => parts.push(VARIANT_STAMPS[st] || st.replace(/-/g, ' ')));
+  if (v.size && v.size !== 'standard') parts.push(v.size === 'jumbo' ? 'Jumbo' : v.size);
+  return parts.join(', ');
+}
+// Sur Cardmarket, la version reverse d'une carte est dans les champs « -holo » du même produit.
+function variantPrice(v) {
+  const cm = v.pricing?.cardmarket;
+  if (!cm) return null;
+  const pick = (k) => (v.type === 'reverse' ? cm[`${k}-holo`] ?? cm[k] : cm[k] ?? cm[`${k}-holo`]);
+  const trend = pick('trend') || pick('avg30') || pick('avg');
+  return trend ? { trend, avg30: pick('avg30'), low: pick('low') } : null;
 }
 
 // Bloc (série) d'un set : la fiche d'une carte ne le donne pas, on le lit sur la fiche du set.
@@ -747,8 +805,10 @@ function getSerie(lang, setId) {
   return serieCache[key];
 }
 
-// lang : langue de la carte ; si fournie, affiche son bloc et son set (Détecteur).
-function renderCard(card, isBest, lang) {
+// opts.lang : langue de la carte ; opts.showSet : afficher bloc et set (Détecteur) ;
+// opts.serieId : bloc déjà connu (rubrique Sets), pour l'image de secours.
+function renderCard(card, isBest, opts = {}) {
+  const { lang, showSet = false, serieId } = opts;
   const cm = card.pricing?.cardmarket;
   const hasHolo = cm && (cm['trend-holo'] || cm['avg-holo']);
   const mainPrice = cm ? (cm.trend || cm.avg30 || cm.avg || cm['trend-holo'] || cm['avg-holo']) : null;
@@ -772,28 +832,44 @@ function renderCard(card, isBest, lang) {
     ${cm.updated ? `<p class="price-label">Mis à jour le ${new Date(cm.updated).toLocaleDateString('fr-FR')}</p>` : ''}`
     : '<p class="no-price">Pas de prix Cardmarket disponible pour cette carte : vérifie directement sur Cardmarket.</p>';
 
+  const variants = (card.variants_detailed || []).map((v) => ({ label: variantLabel(v), price: variantPrice(v) })).filter((v) => v.price);
+  const versions = variants.length > 1 ? `
+    <p class="price-label">Prix par version · état ${cond.label}</p>
+    <table class="prices versions">
+      <tr><th>Version</th><td>Tendance</td><td>Le plus bas</td></tr>
+      ${variants.map((v) => `<tr><th>${escapeHtml(v.label)}</th><td>${formatEur(adj(v.price.trend))}</td><td>${formatEur(adj(v.price.low))}</td></tr>`).join('')}
+    </table>` : '';
+
   const setTotal = card.set?.cardCount?.official;
   const el = document.createElement('article');
   el.className = 'result' + (isBest ? ' best' : '');
   el.innerHTML = `
-    ${cardImgHtml(card, '', true)}
+    ${cardImgHtml(card, '', true, imageSources(card, lang, serieId))}
     <div class="info">
       <h3>${escapeHtml(card.name)}${isBest ? '<span class="badge">Meilleure correspondance</span>' : ''}</h3>
       <p class="meta">${escapeHtml(card.set?.name || '')} · n° ${escapeHtml(card.localId)}${setTotal ? '/' + setTotal : ''}${card.rarity ? ' · ' + escapeHtml(card.rarity) : ''}</p>
-      ${lang && card.set?.id ? `
+      ${showSet && lang && card.set?.id ? `
       <dl class="bloc-set">
         <dt>Bloc</dt><dd class="bloc-name">…</dd>
         <dt>Set</dt><dd>${escapeHtml(card.set.name || card.set.id)}
           <a href="#set/${encodeURIComponent(card.set.id)}" class="open-set" data-lang="${escapeHtml(lang)}">voir le set ›</a></dd>
       </dl>` : ''}
       ${prices}
+      ${versions}
       <div class="actions">
         <a class="button secondary" href="${cardmarketUrl(card)}" target="_blank" rel="noopener">Voir sur Cardmarket</a>
       </div>
     </div>`;
   const blocEl = el.querySelector('.bloc-name');
-  if (blocEl) {
-    getSerie(lang, card.set.id).then((serie) => { blocEl.textContent = serie?.name || 'inconnu'; });
+  const needSerie = lang && card.set?.id && (blocEl || (!serieId && !['en', 'ja'].includes(lang)));
+  if (needSerie) {
+    getSerie(lang, card.set.id).then((serie) => {
+      if (blocEl) blocEl.textContent = serie?.name || 'inconnu';
+      // Bloc connu maintenant : on peut proposer l'image anglaise en secours.
+      const img = el.querySelector('img');
+      const extra = !serieId && serie?.id ? imageSources(card, lang, serie.id).filter((u) => u !== card.image) : [];
+      if (img && extra.length) addImgFallback(img, extra[0]);
+    });
   }
   return el;
 }
