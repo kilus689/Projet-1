@@ -109,6 +109,7 @@ const Sets = (() => {
   const LANG_NAMES = { fr: 'Français', en: 'Anglais', ja: 'Japonais' };
   let missingHandler = null; // écoute les images de cartes qui échouent au chargement
   let currentSerieId = null; // bloc du set affiché (pour l'image anglaise de secours)
+  let currentToken = null;   // identifie le set affiché, pour ignorer les réponses d'un set quitté
 
   function setNotice(html) {
     ui.setStatus.classList.remove('error');
@@ -162,23 +163,48 @@ const Sets = (() => {
         <span>${escapeHtml(c.localId)} · ${escapeHtml(c.name)}</span>
       </button>`).join('');
 
-    // Compte les images manquantes : absentes d'office, ou qui échouent au chargement.
-    const missing = new Set(cards.filter((c) => !imageSources(c, lang, currentSerieId).length).map((c) => c.id));
+    // Images manquantes : on tente d'abord l'image Cardmarket (il faut la fiche de la carte pour
+    // connaître son numéro Cardmarket), puis on compte celles qui restent introuvables.
+    const missing = new Set();
+    const shownSet = set, token = {};
+    currentToken = token;
     const update = () => {
       const tip = 'Touche une carte pour voir son prix.';
       if (!missing.size) return setNotice(tip);
       const all = missing.size === cards.length;
       setNotice(`<span class="notice">${all ? "Les images de ce set ne sont pas encore disponibles"
         : `${missing.size} carte${missing.size > 1 ? 's' : ''} sur ${cards.length} n'${missing.size > 1 ? 'ont' : 'a'} pas encore d'image`}
-        dans la base de cartes (TCGdex)${set.releaseDate ? `, le set étant sorti en ${formatDate(set.releaseDate)}` : ''}.
+        dans la base de cartes (TCGdex) ni sur Cardmarket${set.releaseDate ? `, le set étant sorti en ${formatDate(set.releaseDate)}` : ''}.
         Elles s'afficheront automatiquement dès qu'elles seront ajoutées. ${tip}</span>`);
     };
-    if (missingHandler) ui.cards.removeEventListener('cardimgmissing', missingHandler);
-    missingHandler = (e) => {
-      const id = e.target.closest('.card-thumb')?.dataset.id;
-      if (id) { missing.add(id); update(); }
+    const queue = [];
+    let running = 0;
+    const pump = () => {
+      while (running < 4 && queue.length) {
+        const { img, id } = queue.shift();
+        running++;
+        getJson(`${API}/${lang}/cards/${encodeURIComponent(id)}`)
+          .then((card) => {
+            if (currentToken !== token) return; // l'utilisateur a changé de set
+            const urls = card ? cardmarketImages(card, shownSet) : [];
+            if (urls.length) addImgFallback(img, urls); else { missing.add(id); update(); }
+          })
+          .catch(() => { missing.add(id); update(); })
+          .finally(() => { running--; pump(); });
+      }
     };
+    const tryCardmarket = (img) => {
+      const id = img.closest('.card-thumb')?.dataset.id;
+      if (!id) return;
+      if (img.dataset.cmTried) { missing.add(id); update(); return; } // Cardmarket non plus
+      img.dataset.cmTried = '1';
+      queue.push({ img, id });
+      pump();
+    };
+    if (missingHandler) ui.cards.removeEventListener('cardimgmissing', missingHandler);
+    missingHandler = (e) => tryCardmarket(e.target);
     ui.cards.addEventListener('cardimgmissing', missingHandler);
+    ui.cards.querySelectorAll('img.placeholder').forEach(tryCardmarket); // cartes sans aucune image TCGdex
     update();
   }
 

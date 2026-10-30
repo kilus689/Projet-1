@@ -775,10 +775,15 @@ function renderResults() {
   }
 }
 
-function cardmarketUrl(card) {
-  // Cardmarket référence les cartes japonaises sous leur nom anglais.
-  const q = JA_RE.test(card.name) && englishName ? englishName : card.name;
-  return `https://www.cardmarket.com/fr/Pokemon/Products/Search?searchString=${encodeURIComponent(q)}`;
+// Recherche Cardmarket : Cardmarket nomme les cartes en anglais, avec le code d'extension
+// (ex : « Mew (30C R/RGB) ») : « nom anglais + code » tombe directement sur la bonne carte.
+function cardmarketUrl(card, setInfo) {
+  const dex = Array.isArray(card.dexId) ? card.dexId[0] : card.dexId;
+  const suffix = (card.name.match(/\s*(ex|EX|GX|VMAX|VSTAR|V)$/) || [''])[0].trim();
+  const en = (dex && Reco.nameFor(dex, 'en')) || (JA_RE.test(card.name) && englishName) || '';
+  const base = en ? `${en}${suffix ? ' ' + suffix : ''}` : card.name;
+  const code = setInfo?.abbreviation?.official;
+  return `https://www.cardmarket.com/fr/Pokemon/Products/Search?searchString=${encodeURIComponent(code ? `${base} ${code}` : base)}`;
 }
 
 // Image d'une carte. Les sets tout récents n'ont pas toujours d'image dans TCGdex : soit l'adresse
@@ -796,12 +801,33 @@ function imageSources(card, lang, serieId) {
   return [...new Set(list)];
 }
 
+// Adresse finale d'une image : les images TCGdex se déclinent en tailles (low/high.webp),
+// les autres sources (Cardmarket) sont des fichiers complets.
+const isFullUrl = (u) => /\.(jpe?g|png|webp)(\?|$)/i.test(u);
+const imgUrl = (src, size) => (isFullUrl(src) ? src : `${src}/${size}.webp`);
+const sourceTitle = (u) => (u.includes('cardmarket') ? 'Image Cardmarket (pas encore disponible dans la base de cartes)'
+  : 'Image de la version anglaise (pas encore disponible dans cette langue)');
+
+// Images Cardmarket de secours, d'après le numéro de produit Cardmarket que TCGdex donne pour la carte
+// (prix ou variantes) et le code d'extension (ex : « 30C »). Format d'adresse non garanti :
+// en cas d'échec, l'app passe simplement à la suite.
+function cardmarketImages(card, setInfo) {
+  const ids = [...new Set([card.pricing?.cardmarket?.idProduct, ...(card.variants_detailed || []).map((v) => v.thirdParty?.cardmarket)]
+    .filter((x) => typeof x === 'number'))].slice(0, 2);
+  const codes = [...new Set([setInfo?.abbreviation?.official, setInfo?.abbreviation?.localized, setInfo?.id || card.set?.id].filter(Boolean))];
+  const urls = [];
+  for (const id of ids) for (const code of codes) for (const ext of ['jpg', 'png']) {
+    urls.push(`https://product-images.s3.cardmarket.com/51/${encodeURIComponent(code)}/${id}/${id}.${ext}`);
+  }
+  return urls.slice(0, 8);
+}
+
 function cardImgHtml(card, cls = '', zoom = false, sources = imageSources(card)) {
   const alt = escapeHtml(card.name || '');
   if (!sources.length) return `<img class="${cls} placeholder" src="${CARD_PLACEHOLDER}" alt="${alt} (image indisponible)">`;
   const [first, ...rest] = sources.map(escapeHtml);
-  return `<img class="${cls}${zoom ? ' zoomable' : ''}" src="${first}/low.webp" data-sources="${rest.join('|')}"
-    ${zoom ? `data-full="${first}/high.webp" title="Toucher pour agrandir"` : ''} alt="${alt}" loading="lazy" onerror="cardImgFailed(this)">`;
+  return `<img class="${cls}${zoom ? ' zoomable' : ''}" src="${imgUrl(first, 'low')}" data-sources="${rest.join('|')}"
+    ${zoom ? `data-full="${imgUrl(first, 'high')}" title="Toucher pour agrandir"` : ''} alt="${alt}" loading="lazy" onerror="cardImgFailed(this)">`;
 }
 
 // Image en échec : on passe à l'adresse suivante, sinon à l'image de remplacement.
@@ -810,9 +836,9 @@ function cardImgFailed(img) {
   if (rest.length) {
     const next = rest.shift();
     img.dataset.sources = rest.join('|');
-    img.title = 'Image de la version anglaise (pas encore disponible dans cette langue)';
-    if (img.dataset.full) img.dataset.full = `${next}/high.webp`;
-    img.src = `${next}/low.webp`;
+    img.title = sourceTitle(next);
+    if (img.dataset.full) img.dataset.full = imgUrl(next, 'high');
+    img.src = imgUrl(next, 'low');
     return;
   }
   img.onerror = null;
@@ -822,17 +848,20 @@ function cardImgFailed(img) {
   img.dispatchEvent(new CustomEvent('cardimgmissing', { bubbles: true }));
 }
 
-// Ajoute une adresse de secours connue plus tard (le bloc est chargé à part).
-function addImgFallback(img, url) {
+// Ajoute des adresses de secours connues plus tard (bloc, numéro Cardmarket chargés à part).
+function addImgFallback(img, urls) {
+  urls = [].concat(urls).filter(Boolean);
+  if (!urls.length) return;
   if (img.classList.contains('placeholder')) {
+    const [first, ...rest] = urls;
     img.classList.remove('placeholder');
     img.onerror = () => cardImgFailed(img);
-    img.dataset.sources = '';
-    if (img.closest('.result')) { img.classList.add('zoomable'); img.dataset.full = `${url}/high.webp`; }
-    img.title = 'Image de la version anglaise (pas encore disponible dans cette langue)';
-    img.src = `${url}/low.webp`;
+    img.dataset.sources = rest.join('|');
+    if (img.closest('.result')) { img.classList.add('zoomable'); img.dataset.full = imgUrl(first, 'high'); }
+    img.title = sourceTitle(first);
+    img.src = imgUrl(first, 'low');
   } else {
-    img.dataset.sources = [...(img.dataset.sources || '').split('|').filter(Boolean), url].join('|');
+    img.dataset.sources = [...(img.dataset.sources || '').split('|').filter(Boolean), ...urls].join('|');
   }
 }
 
@@ -858,15 +887,15 @@ function variantPrice(v) {
   return trend ? { trend, avg30: pick('avg30'), low: pick('low') } : null;
 }
 
-// Bloc (série) d'un set : la fiche d'une carte ne le donne pas, on le lit sur la fiche du set.
-const serieCache = {};
-function getSerie(lang, setId) {
+// Fiche d'un set (bloc, code d'extension…) : la fiche d'une carte ne les donne pas.
+const setInfoCache = {};
+function getSetInfo(lang, setId) {
   const key = `${lang}/${setId}`;
-  serieCache[key] ??= getJson(`${API}/${lang}/sets/${encodeURIComponent(setId)}`)
-    .then((set) => set?.serie || null)
-    .catch(() => { delete serieCache[key]; return null; });
-  return serieCache[key];
+  setInfoCache[key] ??= getJson(`${API}/${lang}/sets/${encodeURIComponent(setId)}`)
+    .catch(() => { delete setInfoCache[key]; return null; });
+  return setInfoCache[key];
 }
+const getSerie = (lang, setId) => getSetInfo(lang, setId).then((set) => set?.serie || null);
 
 // opts.lang : langue de la carte ; opts.showSet : afficher bloc et set (Détecteur) ;
 // opts.serieId : bloc déjà connu (rubrique Sets), pour l'image de secours.
@@ -927,14 +956,16 @@ function renderCard(card, isBest, opts = {}) {
       </div>
     </div>`;
   const blocEl = el.querySelector('.bloc-name');
-  const needSerie = lang && card.set?.id && (blocEl || (!serieId && !['en', 'ja'].includes(lang)));
-  if (needSerie) {
-    getSerie(lang, card.set.id).then((serie) => {
-      if (blocEl) blocEl.textContent = serie?.name || 'inconnu';
-      // Bloc connu maintenant : on peut proposer l'image anglaise en secours.
+  if (lang && card.set?.id) {
+    getSetInfo(lang, card.set.id).then((setInfo) => {
+      if (blocEl) blocEl.textContent = setInfo?.serie?.name || 'inconnu';
+      const link = el.querySelector('.actions a');
+      if (link) Reco.loadDict().then(() => { link.href = cardmarketUrl(card, setInfo); });
+      // Fiche du set connue : on peut proposer l'image anglaise puis l'image Cardmarket en secours.
       const img = el.querySelector('img');
-      const extra = !serieId && serie?.id ? imageSources(card, lang, serie.id).filter((u) => u !== card.image) : [];
-      if (img && extra.length) addImgFallback(img, extra[0]);
+      if (!img) return;
+      const en = !serieId && setInfo?.serie?.id ? imageSources(card, lang, setInfo.serie.id).filter((u) => u !== card.image) : [];
+      addImgFallback(img, [...en, ...cardmarketImages(card, setInfo)]);
     });
   }
   return el;

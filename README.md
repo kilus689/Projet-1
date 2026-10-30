@@ -43,8 +43,12 @@ Les prix et les images ne sont pas stockés dans l'app : ils sont lus **en direc
 à chaque recherche. Dès que TCGdex ajoute une image ou met à jour un prix (environ une fois par
 jour pour les prix), l'app l'affiche, sans mise à jour du logiciel.
 
+- Les prix viennent du **guide des prix officiel de Cardmarket**, relu toutes les heures par TCGdex
+  (les cartes des sets du 30ᵉ anniversaire y sont toutes reliées à leur produit Cardmarket).
 - Si l'image d'une carte n'existe pas encore dans la langue choisie, l'app essaie l'image de la
-  version anglaise, puis affiche une image de remplacement « Image bientôt disponible ».
+  version anglaise, puis l'**image Cardmarket** du produit (numéro de produit et code d'extension
+  donnés par TCGdex ; format d'adresse non garanti), puis une image « Image bientôt disponible ».
+- « Voir sur Cardmarket » cherche le nom anglais de la carte suivi du code d'extension (ex : « Charizard 30C »).
 - Les sets très récents (ex : sets du 30ᵉ anniversaire, sortis le 16/09/2026) peuvent avoir des
   images manquantes quelque temps : c'est la base TCGdex qui doit les ajouter.
 

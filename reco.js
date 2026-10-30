@@ -6,6 +6,7 @@
 
 const Reco = (() => {
   let dictPromise = null;
+  const byId = new Map(); // numéro de Pokédex → noms dans chaque langue
 
   // Erreurs typiques de lecture du japonais : kanji ou signes qui ressemblent à des katakana.
   const JA_LOOKALIKES = {
@@ -31,6 +32,7 @@ const Reco = (() => {
       .then(({ langs, species }) => {
         const ja = [], latin = new Map();
         for (const [id, ...names] of species) {
+          byId.set(id, Object.fromEntries(langs.map((l, i) => [l, names[i]])));
           names.forEach((name, i) => {
             const lang = langs[i];
             if (!name) return;
@@ -144,5 +146,8 @@ const Reco = (() => {
     return best;
   }
 
-  return { findSpecies, verify, chooseNumber, loadDict, normJa };
+  // Nom d'un Pokémon dans une langue, d'après son numéro de Pokédex (si le dictionnaire est chargé).
+  const nameFor = (dexId, lang) => byId.get(dexId)?.[lang] || '';
+
+  return { findSpecies, verify, chooseNumber, loadDict, normJa, nameFor };
 })();
