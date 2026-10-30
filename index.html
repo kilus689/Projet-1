@@ -10,7 +10,7 @@
     // Mise à jour automatique : si GitHub a une version plus récente que cette page (gardée en
     // mémoire par Safari ou par l'icône de l'écran d'accueil), on recharge la page à jour.
     (function () {
-      var APP_VERSION = 37;
+      var APP_VERSION = 38;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (v) {
@@ -27,12 +27,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="img/icon-180.png" type="image/png">
   <link rel="apple-touch-icon" href="img/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=37">
+  <link rel="stylesheet" href="style.css?v=38">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="reco.js?v=37" defer></script>
-  <script src="sets.js?v=37" defer></script>
-  <script src="recherche.js?v=37" defer></script>
-  <script src="app.js?v=37" defer></script>
+  <script src="reco.js?v=38" defer></script>
+  <script src="sets.js?v=38" defer></script>
+  <script src="recherche.js?v=38" defer></script>
+  <script src="app.js?v=38" defer></script>
 </head>
 <body>
   <!-- Accueil -->
@@ -211,8 +211,9 @@
       <form id="search-poke-form" class="card-box">
         <div class="row">
           <label>Nom du Pokémon
-            <input id="search-poke" type="search" list="poke-names" placeholder="ex : Pikachu, Nymphali, Sylveon, ニンフィア"
-              autocomplete="off" autocapitalize="words" enterkeyhint="search">
+            <input id="search-poke" type="text" placeholder="ex : Pikachu, Nymphali, Sylveon, ニンフィア"
+              autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words" enterkeyhint="search">
+            <span id="poke-suggest" class="suggest" hidden></span>
           </label>
           <label class="small">Langue des cartes
             <select id="search-poke-lang">
@@ -222,7 +223,6 @@
             </select>
           </label>
         </div>
-        <datalist id="poke-names"></datalist>
         <div class="row">
           <button type="submit" class="primary">🔍 Rechercher</button>
         </div>

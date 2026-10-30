@@ -9,7 +9,7 @@ const Recherche = (() => {
   const $ = (id) => document.getElementById(id);
   const ui = {
     form: $('search-poke-form'), input: $('search-poke'), lang: $('search-poke-lang'),
-    list: $('poke-names'), status: $('search-poke-status'), results: $('search-poke-results'),
+    suggest: $('poke-suggest'), status: $('search-poke-status'), results: $('search-poke-results'),
   };
   let searchToken = 0;
 
@@ -43,10 +43,26 @@ const Recherche = (() => {
     ui.status.classList.toggle('busy', !isError && /…\s*$/.test(msg));
   }
 
+  // Suggestions pendant la frappe : au plus 8 noms de Pokémon dans la langue des cartes
+  // (liste maison : la liste « datalist » de 1 025 noms bloquait la saisie sur iPad).
+  let allNames = [];
   async function fillSuggestions() {
     await Reco.loadDict();
-    const names = Reco.namesIn(getLang()).sort((a, b) => a.localeCompare(b, 'fr'));
-    ui.list.innerHTML = names.map((n) => `<option value="${escapeHtml(n)}">`).join('');
+    allNames = Reco.namesIn(getLang()).map((n) => ({ n, key: normalize(n), ja: Reco.normJa(n) }));
+  }
+  function showSuggestions() {
+    const q = ui.input.value.trim();
+    const key = normalize(q), ja = Reco.normJa(q);
+    if (!q || !allNames.length) { ui.suggest.hidden = true; return; }
+    const starts = [], contains = [];
+    for (const e of allNames) {
+      const hit = ja ? e.ja.indexOf(ja) : key ? e.key.indexOf(key) : -1;
+      if (hit === 0) starts.push(e.n); else if (hit > 0) contains.push(e.n);
+    }
+    const list = [...starts.sort((a, b) => a.length - b.length), ...contains].slice(0, 8);
+    if (!list.length || (list.length === 1 && list[0] === q)) { ui.suggest.hidden = true; return; }
+    ui.suggest.innerHTML = list.map((n) => `<button type="button" data-name="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('');
+    ui.suggest.hidden = false;
   }
 
   async function search() {
@@ -60,7 +76,10 @@ const Recherche = (() => {
     try {
       // Nom tapé dans n'importe quelle langue → nom du Pokémon dans la langue des cartes.
       const species = await Reco.lookup(query);
-      const name = species?.names?.[lang] || query;
+      // Nom incomplet (« Nymph », « ニンフ ») : on prend la première suggestion.
+      const key = normalize(query), ja = Reco.normJa(query);
+      const prefix = !species && allNames.find((e) => (ja ? e.ja.startsWith(ja) : key && e.key.startsWith(key)));
+      const name = species?.names?.[lang] || prefix?.n || query;
       const [cards, series] = await Promise.all([
         getJson(`${API}/${lang}/cards?name=${encodeURIComponent(name)}`).then((r) => r || []),
         Sets.loadSeries(lang),
@@ -83,7 +102,7 @@ const Recherche = (() => {
         total++;
       }
 
-      const shownName = species && name !== query ? `${name} (${query})` : name;
+      const shownName = (species || prefix) && name !== query ? `${name} (${query})` : name;
       if (!total) {
         setStatus(`Aucune carte trouvée pour « ${shownName} »${species ? '' : ' : vérifie l\'orthographe ou choisis une autre langue'}.`, true);
         return;
@@ -127,7 +146,19 @@ const Recherche = (() => {
   }
 
   ui.lang.value = getLang();
-  ui.form.addEventListener('submit', (e) => { e.preventDefault(); ui.input.blur(); search(); });
+  ui.form.addEventListener('submit', (e) => { e.preventDefault(); ui.suggest.hidden = true; ui.input.blur(); search(); });
+  ui.input.addEventListener('input', showSuggestions);
+  ui.input.addEventListener('blur', () => setTimeout(() => { ui.suggest.hidden = true; }, 200));
+  // pointerdown plutôt que click : la suggestion est prise avant que le champ perde le focus.
+  ui.suggest.addEventListener('pointerdown', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    e.preventDefault();
+    ui.input.value = b.dataset.name;
+    ui.suggest.hidden = true;
+    ui.input.blur();
+    search();
+  });
   ui.lang.addEventListener('change', () => {
     try { localStorage.setItem(LANG_KEY, ui.lang.value); } catch { /* stockage indisponible */ }
     fillSuggestions();
@@ -141,5 +172,5 @@ const Recherche = (() => {
     if (link) try { localStorage.setItem('setsLang', link.dataset.lang); } catch { /* stockage indisponible */ }
   });
 
-  return { show: () => { fillSuggestions(); if (!ui.input.value) ui.input.focus(); } };
+  return { show: () => { fillSuggestions(); } };
 })();
