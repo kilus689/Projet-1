@@ -4,17 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#1d2b53">
+  <meta http-equiv="Cache-Control" content="no-cache">
   <title>Robinpoké</title>
+  <script>
+    // Mise à jour automatique : si GitHub a une version plus récente que cette page (gardée en
+    // mémoire par Safari ou par l'icône de l'écran d'accueil), on recharge la page à jour.
+    (function () {
+      var APP_VERSION = 37;
+      fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (v) {
+          var key = 'reloadedFor' + v.version;
+          if (v.version > APP_VERSION && !sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, '1');
+            location.replace(location.pathname + '?v=' + v.version + location.hash);
+          }
+        })
+        .catch(function () { /* hors ligne : on garde la page actuelle */ });
+    })();
+  </script>
   <meta name="apple-mobile-web-app-title" content="Robinpoké">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="img/icon-180.png" type="image/png">
   <link rel="apple-touch-icon" href="img/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=36">
+  <link rel="stylesheet" href="style.css?v=37">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="reco.js?v=36" defer></script>
-  <script src="sets.js?v=36" defer></script>
-  <script src="recherche.js?v=36" defer></script>
-  <script src="app.js?v=36" defer></script>
+  <script src="reco.js?v=37" defer></script>
+  <script src="sets.js?v=37" defer></script>
+  <script src="recherche.js?v=37" defer></script>
+  <script src="app.js?v=37" defer></script>
 </head>
 <body>
   <!-- Accueil -->

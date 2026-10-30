@@ -70,7 +70,14 @@ Fichiers statiques (`index.html`, `app.js`, `style.css`), aucune installation.
 - **En ligne** : GitHub Pages (Settings → Pages → branche `scan-pokemon`, dossier `/`).
 - **Sur ordinateur** : `python3 -m http.server 8000` puis <http://localhost:8000>.
 
-### Conseils pour une bonne lecture
+### Mises à jour de l'app
+
+Safari (et l'icône de l'écran d'accueil) garde parfois l'ancienne page en mémoire. À chaque ouverture,
+l'app compare son numéro de version à celui de `version.json` sur GitHub et se recharge si elle est
+en retard. **À chaque publication, augmenter ensemble** le numéro de `version.json`, `APP_VERSION`
+dans `index.html` et les `?v=` des fichiers.
+
+## Conseils pour une bonne lecture
 
 - Carte à plat, bien éclairée, sans reflet, qui remplit tout le cadre jaune.
 - Sans clé Claude, si le nom n'est pas lu, le numéro (ex : 059/103) suffit souvent :
