@@ -12,6 +12,7 @@ const Recherche = (() => {
     suggest: $('poke-suggest'), status: $('search-poke-status'), results: $('search-poke-results'),
   };
   let searchToken = 0;
+  let stopFallback = null; // arrête la recherche d'images Cardmarket de la recherche précédente
 
   const getLang = () => { try { return localStorage.getItem(LANG_KEY) || 'fr'; } catch { return 'fr'; } };
   const setIdOfCard = (id) => id.slice(0, id.lastIndexOf('-'));
@@ -140,6 +141,9 @@ const Recherche = (() => {
             </section>`).join('')}`;
         ui.results.appendChild(el);
       });
+      // Cartes sans image chez TCGdex : on essaie l'image Cardmarket.
+      stopFallback?.();
+      stopFallback = enableCardmarketFallback(ui.results, lang);
     } catch (err) {
       if (token === searchToken) setStatus('Impossible de faire la recherche : ' + err.message, true);
     }

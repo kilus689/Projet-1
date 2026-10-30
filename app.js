@@ -814,12 +814,51 @@ const sourceTitle = (u) => (u.includes('cardmarket') ? 'Image Cardmarket (pas en
 function cardmarketImages(card, setInfo) {
   const ids = [...new Set([card.pricing?.cardmarket?.idProduct, ...(card.variants_detailed || []).map((v) => v.thirdParty?.cardmarket)]
     .filter((x) => typeof x === 'number'))].slice(0, 2);
-  const codes = [...new Set([setInfo?.abbreviation?.official, setInfo?.abbreviation?.localized, setInfo?.id || card.set?.id].filter(Boolean))];
+  // Codes possibles, aussi sans signes (« CRZ:GG » → « CRZGG »).
+  const raw = [setInfo?.abbreviation?.official, setInfo?.abbreviation?.localized, setInfo?.id || card.set?.id].filter(Boolean);
+  const codes = [...new Set(raw.flatMap((c) => [c, c.replace(/[^A-Za-z0-9]/g, '')]).filter(Boolean))];
   const urls = [];
   for (const id of ids) for (const code of codes) for (const ext of ['jpg', 'png']) {
     urls.push(`https://product-images.s3.cardmarket.com/51/${encodeURIComponent(code)}/${id}/${id}.${ext}`);
   }
   return urls.slice(0, 8);
+}
+
+// Grilles de cartes (Sets, Recherche) : quand une vignette finit sur l'image de remplacement,
+// on charge la fiche de la carte pour connaître son numéro Cardmarket et essayer l'image Cardmarket
+// (4 fiches à la fois). onMissing(id) est appelé pour chaque carte restée sans image.
+// Renvoie une fonction qui arrête l'écoute (quand on quitte la page).
+function enableCardmarketFallback(container, lang, onMissing = () => {}) {
+  let stopped = false;
+  const queue = [];
+  let running = 0;
+  const pump = () => {
+    while (running < 4 && queue.length) {
+      const { img, id } = queue.shift();
+      running++;
+      const setId = id.slice(0, id.lastIndexOf('-'));
+      Promise.all([getJson(`${API}/${lang}/cards/${encodeURIComponent(id)}`), getSetInfo(lang, setId)])
+        .then(([card, setInfo]) => {
+          if (stopped) return;
+          const urls = card ? cardmarketImages(card, setInfo) : [];
+          if (urls.length) addImgFallback(img, urls); else onMissing(id);
+        })
+        .catch(() => { if (!stopped) onMissing(id); })
+        .finally(() => { running--; pump(); });
+    }
+  };
+  const tryCardmarket = (img) => {
+    const id = img.closest('.card-thumb')?.dataset.id;
+    if (!id || stopped) return;
+    if (img.dataset.cmTried) { onMissing(id); return; } // Cardmarket n'a pas d'image non plus
+    img.dataset.cmTried = '1';
+    queue.push({ img, id });
+    pump();
+  };
+  const handler = (e) => tryCardmarket(e.target);
+  container.addEventListener('cardimgmissing', handler);
+  container.querySelectorAll('.card-thumb img.placeholder').forEach(tryCardmarket); // aucune image TCGdex
+  return () => { stopped = true; queue.length = 0; container.removeEventListener('cardimgmissing', handler); };
 }
 
 function cardImgHtml(card, cls = '', zoom = false, sources = imageSources(card)) {

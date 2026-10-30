@@ -107,9 +107,8 @@ const Sets = (() => {
   }
 
   const LANG_NAMES = { fr: 'Français', en: 'Anglais', ja: 'Japonais' };
-  let missingHandler = null; // écoute les images de cartes qui échouent au chargement
+  let stopFallback = null;   // arrête la recherche d'images Cardmarket du set précédent
   let currentSerieId = null; // bloc du set affiché (pour l'image anglaise de secours)
-  let currentToken = null;   // identifie le set affiché, pour ignorer les réponses d'un set quitté
 
   function setNotice(html) {
     ui.setStatus.classList.remove('error');
@@ -166,8 +165,6 @@ const Sets = (() => {
     // Images manquantes : on tente d'abord l'image Cardmarket (il faut la fiche de la carte pour
     // connaître son numéro Cardmarket), puis on compte celles qui restent introuvables.
     const missing = new Set();
-    const shownSet = set, token = {};
-    currentToken = token;
     const update = () => {
       const tip = 'Touche une carte pour voir son prix.';
       if (!missing.size) return setNotice(tip);
@@ -177,34 +174,8 @@ const Sets = (() => {
         dans la base de cartes (TCGdex) ni sur Cardmarket${set.releaseDate ? `, le set étant sorti en ${formatDate(set.releaseDate)}` : ''}.
         Elles s'afficheront automatiquement dès qu'elles seront ajoutées. ${tip}</span>`);
     };
-    const queue = [];
-    let running = 0;
-    const pump = () => {
-      while (running < 4 && queue.length) {
-        const { img, id } = queue.shift();
-        running++;
-        getJson(`${API}/${lang}/cards/${encodeURIComponent(id)}`)
-          .then((card) => {
-            if (currentToken !== token) return; // l'utilisateur a changé de set
-            const urls = card ? cardmarketImages(card, shownSet) : [];
-            if (urls.length) addImgFallback(img, urls); else { missing.add(id); update(); }
-          })
-          .catch(() => { missing.add(id); update(); })
-          .finally(() => { running--; pump(); });
-      }
-    };
-    const tryCardmarket = (img) => {
-      const id = img.closest('.card-thumb')?.dataset.id;
-      if (!id) return;
-      if (img.dataset.cmTried) { missing.add(id); update(); return; } // Cardmarket non plus
-      img.dataset.cmTried = '1';
-      queue.push({ img, id });
-      pump();
-    };
-    if (missingHandler) ui.cards.removeEventListener('cardimgmissing', missingHandler);
-    missingHandler = (e) => tryCardmarket(e.target);
-    ui.cards.addEventListener('cardimgmissing', missingHandler);
-    ui.cards.querySelectorAll('img.placeholder').forEach(tryCardmarket); // cartes sans aucune image TCGdex
+    stopFallback?.();
+    stopFallback = enableCardmarketFallback(ui.cards, lang, (id) => { missing.add(id); update(); });
     update();
   }
 
