@@ -45,6 +45,7 @@ let setCode = '';      // code d'extension lu sur la carte (ex : SV8a)
 function setStatus(msg, isError = false) {
   els.status.textContent = msg;
   els.status.classList.toggle('error', isError);
+  els.status.classList.toggle('busy', !isError && /…\s*$/.test(msg)); // indicateur animé pendant le travail
 }
 
 function normalize(s) {
@@ -84,8 +85,9 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-async function getJson(url) {
-  const res = await fetch(url);
+// fresh : redemande toujours au serveur (prix du jour), au lieu d'une copie gardée par le navigateur.
+async function getJson(url, { fresh = false } = {}) {
+  const res = await fetch(url, fresh ? { cache: 'no-cache' } : undefined);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Erreur API (${res.status})`);
   return res.json();
@@ -112,7 +114,14 @@ async function fileToCanvas(file) {
   c.height = Math.round(img.height * scale);
   c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
   img.close?.();
-  return trimBackground(c);
+  // Plusieurs passes : après les bandes noires, il reste parfois la table autour de la carte.
+  let out = c;
+  for (let i = 0; i < 3; i++) {
+    const next = trimBackground(out);
+    if (next.width * next.height > out.width * out.height * 0.97) break;
+    out = next;
+  }
+  return out;
 }
 
 // Safari ne gère pas toujours createImageBitmap : on passe alors par une balise <img>.
@@ -404,6 +413,11 @@ function cleanName(raw, lang) {
   return words.join(' ');
 }
 
+function findNumbers(text) {
+  const clean = text.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1');
+  return [...clean.matchAll(/(\d{1,3})\s*[\/⁄]\s*(\d{2,3})/g)].map((m) => `${m[1]}/${m[2]}`);
+}
+
 function findNumber(text) {
   const m = text.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1')
     .match(/(\d{1,3})\s*[\/⁄]\s*(\d{2,3})/);
@@ -454,50 +468,89 @@ async function analyzeWithOcr() {
   const card = photos.front;
   const chosen = els.lang.value;
   setStatus('Lecture de la carte…');
-  // Plusieurs zones (le cadrage n'est jamais parfait) : on garde la lecture la plus sûre.
-  const nameZones = [
-    { img: cropRegion(card, 0.1, 0.02, 0.65, 0.1, 140), psm: '7' },  // ligne du nom seule
-    { img: cropRegion(card, 0, 0.01, 0.8, 0.18, 260), psm: '6' },    // haut de carte, plus large
-  ];
+  Reco.loadDict(); // dictionnaire des noms, chargé pendant la lecture
 
-  // Nom : on essaie l'alphabet latin et le japonais.
+  // Nom : plusieurs zones du haut de la carte, de la plus précise à la plus large
+  // (si la carte ne remplit pas bien le cadre, le nom n'est pas exactement où on l'attend).
+  // Le lecteur lit mieux des caractères de 40 à 60 pixels de haut que de très grands caractères.
+  const nameZones = [
+    { img: cropRegion(card, 0.12, 0.025, 0.6, 0.075, 40), psm: '7' },        // ligne du nom
+    { img: cropRegion(card, 0.12, 0.025, 0.6, 0.075, 60, true), psm: '7' },  // idem, noir et blanc
+    { img: cropRegion(card, 0.08, 0.015, 0.68, 0.1, 40), psm: '6' },         // un peu plus large
+    { img: cropRegion(card, 0.08, 0.015, 0.68, 0.1, 60, true), psm: '6' },
+    { img: cropRegion(card, 0, 0, 1, 0.34, 520), psm: '11' },                // tout le haut, texte épars
+  ];
   const tries = [];
   if (chosen !== 'ja') tries.push({ lang: 'latin', langs: ['fra', 'eng'] });
   if (chosen === 'auto' || chosen === 'ja') tries.push({ lang: 'ja', langs: ['jpn'] });
-  let best = { name: '', conf: -1, lang: 'latin' };
+  const texts = [];
+  let raw = { name: '', conf: -1, lang: 'latin' }; // meilleure lecture brute, si le dictionnaire ne trouve rien
   for (const t of tries) {
     const worker = await getWorker(t.langs);
     for (const zone of nameZones) {
       await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: zone.psm });
       const { text, confidence } = (await worker.recognize(zone.img)).data;
+      texts.push(text);
       const name = cleanName(text, t.lang);
       const conf = name ? confidence + (t.lang === 'ja' && JA_RE.test(name) ? 10 : 0) : -1;
-      if (conf > best.conf) best = { name, conf, lang: t.lang };
+      if (zone.psm !== '11' && conf > raw.conf) raw = { name, conf, lang: t.lang };
     }
   }
+  setStatus('Identification du Pokémon…');
+  const dictResult = await Reco.findSpecies(texts); // null si le dictionnaire n'a pas pu être chargé
+  const found = dictResult || { sure: null, weak: [] };
 
-  // Numéro : en bas à gauche de la carte, en tout petit.
+  // Numéro : en bas à gauche, en tout petit. Plusieurs zones et réglages, puis on garde
+  // la lecture la plus plausible (un total qui correspond à un vrai set, écriture complète…).
+  setStatus('Lecture du numéro…');
   const numWorker = await getWorker(['eng']);
-  await numWorker.setParameters({ tessedit_char_whitelist: '0123456789/', tessedit_pageseg_mode: '11' });
   const readings = [];
-  for (const [x, y, w, h] of [[0, 0.88, 0.5, 0.12], [0, 0.82, 1, 0.18]]) {
-    for (const bin of [false, true]) {
-      readings.push(findNumber((await numWorker.recognize(cropRegion(card, x, y, w, h, 260, bin))).data.text));
-    }
-    if (isPadded(pickNumber(readings))) break; // lecture complète (ex : 059/103) : inutile d'insister
+  // Chaque lecture « vote » : sur des photos réelles, la bonne valeur sort en tête même quand
+  // certaines lectures se trompent d'un chiffre (055 ou 655 au lieu de 059).
+  const BL = [0, 0.9, 0.45, 0.1], BL2 = [0, 0.86, 0.55, 0.14], BOTTOM = [0, 0.82, 1, 0.18];
+  for (const [zone, h, bin, psm] of [
+    [BL, 160, false, '11'], [BL, 160, true, '11'], [BL, 240, false, '6'], [BL, 240, true, '6'],
+    [BL, 480, false, '11'], [BL, 480, false, '6'], [BL2, 160, false, '11'], [BL2, 360, false, '6'],
+    [BL2, 360, true, '11'], [BOTTOM, 240, false, '11'],
+  ]) {
+    await numWorker.setParameters({ tessedit_char_whitelist: '0123456789/', tessedit_pageseg_mode: psm });
+    readings.push(...findNumbers((await numWorker.recognize(cropRegion(card, ...zone, h, bin))).data.text));
   }
-  const number = pickNumber(readings);
+  const guessJa = (found.sure || found.weak[0])?.script === 'ja' || (!found.sure && !found.weak.length && raw.lang === 'ja');
+  const totalLangs = chosen !== 'auto' ? [chosen] : guessJa ? ['ja'] : ['fr', 'en'];
+  const totals = new Set();
+  for (const l of totalLangs) {
+    try { Object.values(await getSets(l)).forEach((st) => st.cardCount?.official && totals.add(st.cardCount.official)); } catch { /* hors ligne */ }
+  }
+  const number = Reco.chooseNumber(readings, totals);
 
-  let lang = chosen !== 'auto' ? chosen : (best.lang === 'ja' ? 'ja' : 'auto');
-  // Carte en alphabet latin : la langue se lit dans le texte des attaques.
+  // Nom sûr, sinon nom peu sûr confirmé par la base (un Pokémon qui existe dans un set de cette taille).
+  let species = found.sure;
+  if (!species && found.weak.length) {
+    setStatus('Vérification du nom dans la base de cartes…');
+    const total = parseInt((number.split('/')[1] || ''), 10) || null;
+    const vLangs = chosen !== 'auto' ? [chosen] : ['ja', 'fr', 'en'];
+    species = await Reco.verify(found.weak, vLangs, total, getJson, getSets, API);
+  }
+  Reco.last = { texts, found, species, readings }; // pour le diagnostic
+  const nameLang = species ? (species.script === 'ja' ? 'ja' : 'latin') : raw.lang;
+  // Suffixe éventuel lu sur la carte (ex, V, VMAX…), utile pour l'affichage.
+  const suffix = (texts.join(' ').match(/\b(VMAX|VSTAR|GX|EX|ex)\b/) || [''])[0];
+  // Sans nom identifié, on n'envoie pas de charabia japonais à la recherche (le numéro suffira peut-être).
+  // (Sans dictionnaire disponible, on garde la lecture brute comme avant.)
+  const name = species ? `${species.name}${suffix ? ' ' + suffix : ''}` : (raw.lang === 'latin' || !dictResult ? raw.name : '');
+
+  let lang = chosen !== 'auto' ? chosen : nameLang === 'ja' ? 'ja' : 'auto';
+  // Carte en alphabet latin : la langue se lit dans le texte des attaques,
+  // sinon dans le nom lui-même s'il n'existe que dans une langue (Dracaufeu → français).
   if (lang === 'auto') {
     setStatus('Détection de la langue…');
     const worker = await getWorker(['fra', 'eng']);
     await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '6' });
     const text = (await worker.recognize(cropRegion(card, 0.04, 0.5, 0.92, 0.46, 900))).data.text;
-    lang = detectLanguage(text) || 'auto';
+    lang = detectLanguage(text) || (species?.langs?.length === 1 ? species.langs[0] : 'auto');
   }
-  return { name: best.name, number, lang };
+  return { name, number, lang, species };
 }
 
 /* ---------- Analyse ---------- */
@@ -650,7 +703,7 @@ async function search() {
     const list = sure ? candidates : candidates.filter((c) => c.sim >= 0.5);
     const top = list.slice(0, 6);
     const details = (await Promise.all(top.map((c) =>
-      getJson(`${API}/${lang}/cards/${encodeURIComponent(c.brief.id)}`).catch(() => null))));
+      getJson(`${API}/${lang}/cards/${encodeURIComponent(c.brief.id)}`, { fresh: true }).catch(() => null))));
 
     const ref = details.find(Boolean);
     const names = ref ? await speciesNames(ref, name) : null;
@@ -709,7 +762,17 @@ function renderMissing(names, num, total, hasOthers) {
 function renderResults() {
   els.results.innerHTML = '';
   if (missingBox) els.results.appendChild(missingBox);
-  shown.forEach(({ card, best }) => els.results.appendChild(renderCard(card, best, { lang: shownLang, showSet: true })));
+  const render = ({ card, best }) => renderCard(card, best, { lang: shownLang, showSet: true });
+  // Carte identifiée avec certitude : elle seule s'affiche, les autres sont repliées en dessous.
+  const sure = shown.length && shown[0].best;
+  (sure ? shown.slice(0, 1) : shown).forEach((x) => els.results.appendChild(render(x)));
+  if (sure && shown.length > 1) {
+    const more = document.createElement('details');
+    more.className = 'others';
+    more.innerHTML = `<summary>Autres cartes possibles (${shown.length - 1})</summary>`;
+    shown.slice(1).forEach((x) => more.appendChild(render(x)));
+    els.results.appendChild(more);
+  }
 }
 
 function cardmarketUrl(card) {
@@ -815,8 +878,10 @@ function renderCard(card, isBest, opts = {}) {
   const cond = CONDITIONS[els.condition.value] || CONDITIONS.NM;
   const adj = (v) => (typeof v === 'number' ? v * cond.factor : v);
 
-  const row = (label, normal, holo) =>
-    `<tr><th>${label}</th><td>${formatEur(adj(normal))}</td>${hasHolo ? `<td>${formatEur(adj(holo))}</td>` : ''}</tr>`;
+  // Les lignes sans aucune valeur sont masquées, pour un tableau plus lisible.
+  const has = (v) => typeof v === 'number' && v > 0;
+  const row = (label, normal, holo) => (!has(normal) && !(hasHolo && has(holo))) ? ''
+    : `<tr><th>${label}</th><td>${formatEur(adj(normal))}</td>${hasHolo ? `<td>${formatEur(adj(holo))}</td>` : ''}</tr>`;
 
   const prices = mainPrice ? `
     <p class="price-label">Prix Cardmarket · état ${cond.label}</p>
@@ -827,6 +892,7 @@ function renderCard(card, isBest, opts = {}) {
       ${row('Tendance', cm.trend, cm['trend-holo'])}
       ${row('Moyenne 30 j', cm.avg30, cm['avg30-holo'])}
       ${row('Moyenne 7 j', cm.avg7, cm['avg7-holo'])}
+      ${row('Moyenne 1 j', cm.avg1, cm['avg1-holo'])}
       ${row('Prix le plus bas', cm.low, cm['low-holo'])}
     </table>
     ${cm.updated ? `<p class="price-label">Mis à jour le ${new Date(cm.updated).toLocaleDateString('fr-FR')}</p>` : ''}`

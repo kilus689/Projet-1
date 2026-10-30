@@ -281,3 +281,27 @@ img.placeholder { cursor: default; }
 .prices.versions { margin-top: 4px; }
 .prices.versions th { font-weight: 500; }
 .prices.versions tr:first-child td, .prices.versions tr:first-child th { color: var(--muted); font-size: .75rem; }
+
+/* ---------- Mise à jour de l'affichage ---------- */
+/* Indicateur animé pendant les étapes longues */
+.status.busy::before {
+  content: ''; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px;
+  border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%;
+  animation: tourne .8s linear infinite;
+}
+@keyframes tourne { to { transform: rotate(360deg); } }
+
+/* iPad et grands écrans : plus de place pour les cartes et les prix */
+@media (min-width: 820px) {
+  main, .topbar { max-width: 900px; }
+  .result { padding: 16px; gap: 20px; }
+  .result img { width: 190px; }
+  .result img.placeholder { width: 190px; }
+  .price-main { font-size: 2rem; }
+  .card-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px; }
+  .set-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .slots { max-width: 620px; margin-left: auto; margin-right: auto; }
+}
+
+details.others { margin-bottom: 12px; }
+details.others summary { cursor: pointer; color: var(--muted); font-weight: 600; padding: 8px 4px 12px; }

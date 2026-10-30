@@ -186,7 +186,7 @@ const Sets = (() => {
     ui.modal.hidden = false;
     ui.modalBody.innerHTML = '<p class="status">Chargement du prix…</p>';
     try {
-      const card = await getJson(`${API}/${getLang()}/cards/${encodeURIComponent(id)}`);
+      const card = await getJson(`${API}/${getLang()}/cards/${encodeURIComponent(id)}`, { fresh: true });
       if (!card) throw new Error('carte introuvable');
       englishName = ''; // pas de nom anglais connu ici (utilisé par le lien Cardmarket)
       ui.modalBody.innerHTML = '';

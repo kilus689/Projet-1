@@ -23,8 +23,14 @@ D'autres rubriques viendront s'ajouter au menu d'accueil.
      et **estime son état** (Mint → Poor) en regardant coins, bords, surface et centrage du recto et du verso.
      Coût : quelques centimes par carte sur ton compte Anthropic. La clé reste sur l'appareil.
    - **Sans clé** : lecteur de texte gratuit ([Tesseract.js](https://tesseract.projectnaptha.com/)),
-     langue détectée automatiquement (latin ou japonais). Moins fiable sur les cartes holo,
-     et l'état se choisit à la main.
+     langue détectée automatiquement (latin ou japonais), et l'état se choisit à la main.
+     Pour fiabiliser la lecture :
+     - le nom est lu sur plusieurs zones et réglages, puis corrigé grâce à un **dictionnaire des
+       1 025 Pokémon** en 6 langues (`data/noms-pokemon.json`, d'après [PokéAPI](https://pokeapi.co)),
+       en tenant compte des confusions typiques du japonais (二/ニ, 力/カ…) ; un nom peu sûr n'est
+       gardé que s'il existe une carte de ce Pokémon dans un set de la taille lue ;
+     - le numéro est lu une dizaine de fois avec des réglages différents, et la lecture la plus
+       fréquente dont le total correspond à un vrai set l'emporte.
 3. **Identification** : la carte est recherchée dans l'API gratuite [TCGdex](https://tcgdex.dev).
    Le numéro, le nombre de cartes de l'extension et le code d'extension départagent les versions.
 4. **Prix** : TCGdex fournit les prix Cardmarket (tendance, moyennes 7 j / 30 j, prix le plus bas),
