@@ -208,15 +208,16 @@ const Sets = (() => {
     update();
   }
 
-  async function openCard(id) {
+  // Fenêtre de prix d'une carte (aussi utilisée par la rubrique Recherche).
+  async function openCard(id, lang = getLang(), serieId = currentSerieId) {
     ui.modal.hidden = false;
     ui.modalBody.innerHTML = '<p class="status">Chargement du prix…</p>';
     try {
-      const card = await getJson(`${API}/${getLang()}/cards/${encodeURIComponent(id)}`, { fresh: true });
+      const card = await getJson(`${API}/${lang}/cards/${encodeURIComponent(id)}`, { fresh: true });
       if (!card) throw new Error('carte introuvable');
       englishName = ''; // pas de nom anglais connu ici (utilisé par le lien Cardmarket)
       ui.modalBody.innerHTML = '';
-      ui.modalBody.appendChild(renderCard(card, false, { lang: getLang(), serieId: currentSerieId }));
+      ui.modalBody.appendChild(renderCard(card, false, { lang, serieId }));
     } catch (err) {
       ui.modalBody.innerHTML = `<p class="status error">Impossible de charger cette carte : ${escapeHtml(err.message)}</p>`;
     }
@@ -239,5 +240,5 @@ const Sets = (() => {
   ui.modalClose.addEventListener('click', () => { ui.modal.hidden = true; });
   ui.modal.addEventListener('click', (e) => { if (e.target === ui.modal) ui.modal.hidden = true; });
 
-  return { showSeries, showSet };
+  return { showSeries, showSet, openCard, loadSeries, setLogo, formatDate, isHidden };
 })();

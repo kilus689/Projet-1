@@ -146,8 +146,29 @@ const Reco = (() => {
     return best;
   }
 
+  // Pokémon correspondant à un nom tapé dans n'importe quelle langue (« Sylveon », « nymphali »,
+  // « ニンフィア »…) : nom exact d'abord, sinon le plus ressemblant. Renvoie { id, names } ou null.
+  async function lookup(query) {
+    if (!(await loadDict()) || !query.trim()) return null;
+    const qLatin = normLatin(query), qJa = normJa(query);
+    let best = null, bestSim = 0;
+    for (const [id, names] of byId) {
+      for (const [lang, name] of Object.entries(names)) {
+        if (!name) continue;
+        const a = lang === 'ja' ? qJa : qLatin, b = lang === 'ja' ? normJa(name) : normLatin(name);
+        if (!a || !b) continue;
+        const sim = a === b ? 2 : 1 - levenshtein(a, b) / Math.max(a.length, b.length);
+        if (sim > bestSim) { bestSim = sim; best = { id, names }; }
+      }
+    }
+    return bestSim >= 0.75 ? best : null;
+  }
+
+  // Tous les noms de Pokémon dans une langue (pour les suggestions pendant la frappe).
+  const namesIn = (lang) => [...byId.values()].map((n) => n[lang]).filter(Boolean);
+
   // Nom d'un Pokémon dans une langue, d'après son numéro de Pokédex (si le dictionnaire est chargé).
   const nameFor = (dexId, lang) => byId.get(dexId)?.[lang] || '';
 
-  return { findSpecies, verify, chooseNumber, loadDict, normJa, nameFor };
+  return { findSpecies, verify, chooseNumber, loadDict, normJa, nameFor, lookup, namesIn };
 })();

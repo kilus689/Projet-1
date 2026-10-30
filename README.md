@@ -8,6 +8,11 @@ Application web pour les cartes Pokémon. L'accueil présente les rubriques :
   Épée et Bouclier…), du plus récent au plus ancien, en français, anglais ou japonais.
   Toucher un set affiche ses cartes ; toucher une carte affiche son prix Cardmarket.
 
+- **🔍 Recherche** : on tape le nom d'un Pokémon (dans n'importe quelle langue : « Sylveon » trouve
+  aussi Nymphali) et toutes ses cartes s'affichent, rangées par bloc puis par set, du plus récent
+  au plus ancien. Les noms proches sont distingués (« Mew » ne renvoie pas Mewtwo). Toucher une
+  carte affiche son prix ; « voir le set » ouvre le set dans la rubrique Sets.
+
 D'autres rubriques viendront s'ajouter au menu d'accueil.
 
 ## Détecteur

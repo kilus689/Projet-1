@@ -9,11 +9,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="img/icon-180.png" type="image/png">
   <link rel="apple-touch-icon" href="img/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=35">
+  <link rel="stylesheet" href="style.css?v=36">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="reco.js?v=35" defer></script>
-  <script src="sets.js?v=35" defer></script>
-  <script src="app.js?v=35" defer></script>
+  <script src="reco.js?v=36" defer></script>
+  <script src="sets.js?v=36" defer></script>
+  <script src="recherche.js?v=36" defer></script>
+  <script src="app.js?v=36" defer></script>
 </head>
 <body>
   <!-- Accueil -->
@@ -35,6 +36,12 @@
         <span class="menu-icon"><img class="pokedex-icon" src="img/pokedex.svg?v=1" alt=""></span>
         <span class="menu-text"><strong>Sets</strong>
           <small>Tous les sets Pokémon, rangés par bloc, avec leurs cartes et leurs prix</small></span>
+        <span class="menu-arrow">›</span>
+      </a>
+      <a class="menu-item" href="#recherche">
+        <span class="menu-icon search-icon">🔍</span>
+        <span class="menu-text"><strong>Recherche</strong>
+          <small>Toutes les cartes d'un Pokémon, dans tous les blocs et tous les sets</small></span>
         <span class="menu-arrow">›</span>
       </a>
     </nav>
@@ -172,6 +179,38 @@
       <div id="set-header" class="card-box set-header"></div>
       <p id="set-status" class="status" aria-live="polite"></p>
       <div id="set-cards" class="card-grid"></div>
+    </main>
+  </div>
+
+  <!-- Recherche : toutes les cartes d'un Pokémon -->
+  <div id="view-recherche" class="view" hidden>
+    <header class="topbar">
+      <a href="#accueil" class="back">‹ Accueil</a>
+      <h2>🔍 Recherche</h2>
+      <span class="topbar-spacer"></span>
+    </header>
+    <main>
+      <form id="search-poke-form" class="card-box">
+        <div class="row">
+          <label>Nom du Pokémon
+            <input id="search-poke" type="search" list="poke-names" placeholder="ex : Pikachu, Nymphali, Sylveon, ニンフィア"
+              autocomplete="off" autocapitalize="words" enterkeyhint="search">
+          </label>
+          <label class="small">Langue des cartes
+            <select id="search-poke-lang">
+              <option value="fr">Français</option>
+              <option value="en">Anglais</option>
+              <option value="ja">Japonais</option>
+            </select>
+          </label>
+        </div>
+        <datalist id="poke-names"></datalist>
+        <div class="row">
+          <button type="submit" class="primary">🔍 Rechercher</button>
+        </div>
+      </form>
+      <p id="search-poke-status" class="status" aria-live="polite"></p>
+      <div id="search-poke-results"></div>
     </main>
   </div>
 

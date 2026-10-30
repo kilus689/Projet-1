@@ -305,3 +305,19 @@ img.placeholder { cursor: default; }
 
 details.others { margin-bottom: 12px; }
 details.others summary { cursor: pointer; color: var(--muted); font-weight: 600; padding: 8px 4px 12px; }
+
+/* ---------- Recherche ---------- */
+#search-poke-form .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+#search-poke-form .row + .row { margin-top: 10px; }
+#search-poke-form label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); flex: 2 1 220px; }
+#search-poke-form label.small { flex: 1 1 130px; }
+.search-icon { width: 40px; text-align: center; font-size: 2.1rem; flex-shrink: 0; }
+.search-serie { padding: 0 0 4px; }
+.search-set { padding: 4px 16px 14px; border-top: 1px solid var(--border); }
+.search-set-title {
+  display: flex; align-items: center; gap: 12px; padding: 10px 0; color: var(--text); text-decoration: none;
+}
+.search-set-title strong { display: block; }
+.search-set-title small { color: var(--accent); }
+.search-set-logo { width: 70px; height: 34px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.search-set-logo .set-logo, .search-set-logo img { max-height: 34px; max-width: 70px; height: auto; object-fit: contain; }

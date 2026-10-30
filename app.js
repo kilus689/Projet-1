@@ -979,7 +979,7 @@ document.addEventListener('click', (e) => {
 
 /* ---------- Navigation entre l'accueil et les rubriques ---------- */
 
-const VIEWS = { '': 'view-home', '#accueil': 'view-home', '#detecteur': 'view-detecteur', '#sets': 'view-sets' };
+const VIEWS = { '': 'view-home', '#accueil': 'view-home', '#detecteur': 'view-detecteur', '#sets': 'view-sets', '#recherche': 'view-recherche' };
 
 function showView() {
   const hash = location.hash;
@@ -990,6 +990,7 @@ function showView() {
   window.scrollTo(0, 0);
   if (target === 'view-sets') Sets.showSeries();
   if (target === 'view-set') Sets.showSet(decodeURIComponent(hash.slice(5)));
+  if (target === 'view-recherche') Recherche.show();
 }
 window.addEventListener('hashchange', showView);
 showView();
