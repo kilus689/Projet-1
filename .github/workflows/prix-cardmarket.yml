@@ -1,0 +1,39 @@
+# Chaque jour : télécharge la liste des cartes et le guide des prix officiels de Cardmarket,
+# et met à jour les tables de prix de l'app (data/cardmarket/).
+name: Prix Cardmarket
+
+on:
+  schedule:
+    - cron: '17 5 * * *'   # tous les jours vers 5 h 17 (UTC), après la mise à jour de Cardmarket
+  workflow_dispatch:
+  push:   # aussi à chaque modification du script (et donc dès sa mise en ligne)
+    branches: [scan-pokemon]
+    paths: ['scripts/cardmarket_prix.py', '.github/workflows/prix-cardmarket.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prix-cardmarket
+  cancel-in-progress: true
+
+jobs:
+  prix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: scan-pokemon   # la branche publiée par GitHub Pages
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Construire les tables de prix
+        run: python3 scripts/cardmarket_prix.py data/cardmarket
+      - name: Enregistrer s'il y a du nouveau
+        run: |
+          git config user.name "Prix Cardmarket (automatique)"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/cardmarket
+          if git diff --cached --quiet; then echo "Aucun changement"; exit 0; fi
+          git commit -m "Prix Cardmarket du $(date -u +%Y-%m-%d)"
+          git push
