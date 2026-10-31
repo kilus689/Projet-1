@@ -54,6 +54,17 @@ D'autres rubriques viendront s'ajouter au menu d'accueil.
    ainsi qu'un **prix par version** quand une carte en a plusieurs (normale, reverse, holo,
    tampon 30ᵉ anniversaire…). Un bouton ouvre la recherche sur Cardmarket pour vérifier.
 
+## Prix direct Cardmarket
+
+La tâche GitHub **« Prix Cardmarket »** (`.github/workflows/prix-cardmarket.yml`) télécharge chaque jour
+les deux fichiers officiels de Cardmarket (liste des cartes Pokémon et guide des prix), et range les
+fiches par extension Cardmarket dans `data/cardmarket/` (un fichier par extension). L'app retrouve la
+carte dans l'extension Cardmarket du set (numéro donné par TCGdex) par son **nom anglais**, puis, quand
+plusieurs fiches ont ce nom (ex : Lugia EX 68/98 et Full Art 94/98), par son **numéro** : la n-ième carte
+de ce nom dans le set correspond à la n-ième fiche créée chez Cardmarket. Elle affiche alors la
+**moyenne 7 jours** de cette fiche, même quand TCGdex est relié à la mauvaise. En cas de doute (nombre
+de fiches différent), elle garde le prix TCGdex.
+
 ## Données et mises à jour
 
 Les prix et les images ne sont pas stockés dans l'app : ils sont lus **en direct** dans TCGdex

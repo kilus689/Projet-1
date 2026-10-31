@@ -974,6 +974,57 @@ function getSetInfo(lang, setId) {
 }
 const getSerie = (lang, setId) => getSetInfo(lang, setId).then((set) => set?.serie || null);
 
+// ---------- Prix direct Cardmarket (nom + numéro) ----------
+// Tables construites chaque jour par la tâche GitHub « Prix Cardmarket » à partir des fichiers
+// officiels de Cardmarket, une par extension Cardmarket : liste triée par idProduct de
+// [idProduct, nom, attaques, avg7, avg30, avg, trend, avg7-holo, avg30-holo].
+// Le fichier officiel n'a pas le numéro des cartes : on retrouve la fiche par le NOM anglais dans
+// l'extension, et quand plusieurs fiches ont ce nom (ex : Lugia EX 68/98 et Full Art 94/98), par le
+// NUMÉRO : la n-ième carte de ce nom dans le set ↔ la n-ième fiche créée chez Cardmarket.
+const CM_RAW = 'https://raw.githubusercontent.com/kilus689/Projet-1/scan-pokemon/data/cardmarket';
+const cmCache = {};
+function cmFetch(file) {
+  // Sur le site (GitHub Pages) d'abord, sinon directement dans le dépôt GitHub.
+  cmCache[file] ??= fetch(`data/cardmarket/${file}`, { cache: 'no-cache' })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .catch(() => fetch(`${CM_RAW}/${file}`).then((r) => (r.ok ? r.json() : null)))
+    .catch(() => null);
+  return cmCache[file];
+}
+const cmNorm = (s) => normalize(String(s || '').replace(/[-–]/g, ' ')).replace(/\s+/g, ' ').trim();
+const localNum = (id) => { const n = parseInt(id, 10); return isNaN(n) ? Infinity : n; };
+
+// Fiche Cardmarket d'une carte : { idProduct, name, avg7, avg30, avg, trend, holo7, rank, of } ou null.
+async function cardmarketDirect(card, setInfo, lang) {
+  const exp = setInfo?.thirdParty?.cardmarket;
+  if (!exp || !card.localId) return null;
+  const rows = await cmFetch(`${exp}.json`);
+  if (!Array.isArray(rows) || !rows.length) return null;
+  // Nom anglais de la carte (Cardmarket nomme les cartes en anglais).
+  let en = card.name;
+  if (lang && lang !== 'en') {
+    const enCard = await getJson(`${API}/en/cards/${encodeURIComponent(card.id)}`).catch(() => null);
+    const dex = Array.isArray(card.dexId) ? card.dexId[0] : null;
+    const suffix = (card.name.match(/\s*(ex|EX|GX|VMAX|VSTAR|V|BREAK|LV\.X)$/) || [''])[0].trim();
+    en = enCard?.name || (dex && Reco.nameFor(dex, 'en') ? `${Reco.nameFor(dex, 'en')}${suffix ? ' ' + suffix : ''}` : card.name);
+  }
+  const key = cmNorm(en);
+  let same = rows.filter((r) => cmNorm(r[1]) === key);
+  if (!same.length) same = rows.filter((r) => similarity(cmNorm(r[1]), key) >= 0.88);
+  if (!same.length) return null;
+  let pick = same[0], rank = 1;
+  if (same.length > 1) {
+    // Plusieurs fiches de ce nom : rang de la carte parmi les cartes du même nom dans le set.
+    const twins = (setInfo.cards || []).filter((c) => cmNorm(c.name) === cmNorm(card.name))
+      .sort((a, b) => localNum(a.localId) - localNum(b.localId) || String(a.localId).localeCompare(String(b.localId)));
+    const i = twins.findIndex((c) => c.id === card.id);
+    if (i < 0 || twins.length !== same.length) return null; // correspondance incertaine : on n'invente rien
+    pick = same[i];
+    rank = i + 1;
+  }
+  return { idProduct: pick[0], name: pick[1], avg7: pick[3], avg30: pick[4], avg: pick[5], trend: pick[6], holo7: pick[7], rank, of: same.length };
+}
+
 // opts.lang : langue de la carte ; opts.showSet : afficher bloc et set (Détecteur) ;
 // opts.serieId : bloc déjà connu (rubrique Sets), pour l'image de secours ;
 // opts.addToBinder : bouton « Ajouter au classeur » (Détecteur, Recherche).
@@ -1054,6 +1105,7 @@ function renderCard(card, isBest, opts = {}) {
       for (const t of twins) {
         const other = await getJson(`${API}/${lang}/cards/${encodeURIComponent(t.id)}`).catch(() => null);
         if (other?.pricing?.cardmarket?.idProduct !== idProduct) continue;
+        if (el.querySelector('.price-main')?.dataset.cardmarket) break; // prix direct Cardmarket déjà trouvé
         const box = document.createElement('p');
         box.className = 'price-warning';
         box.innerHTML = `⚠️ Erreur de la base de cartes : cette carte (n° ${escapeHtml(card.localId)}) et la n° ${escapeHtml(other.localId)}
@@ -1071,6 +1123,29 @@ function renderCard(card, isBest, opts = {}) {
       if (blocEl) blocEl.textContent = setInfo?.serie?.name || 'inconnu';
       const link = el.querySelector('.actions a');
       if (link) Reco.loadDict().then(() => { link.href = cardmarketUrl(card, setInfo); });
+      // Prix direct Cardmarket (code + numéro) : il remplace le prix TCGdex, qui peut venir d'une mauvaise fiche.
+      Reco.loadDict().then(() => cardmarketDirect(card, setInfo, lang)).then((cmd) => {
+        const price = cmd && (cmd.avg7 || cmd.avg30 || cmd.avg || cmd.trend);
+        if (!price) return;
+        let main = el.querySelector('.price-main');
+        if (!main) {
+          el.querySelector('.no-price')?.insertAdjacentHTML('afterend', '<p class="price-label"></p><p class="price-main"></p>');
+          el.querySelector('.no-price')?.remove();
+          main = el.querySelector('.price-main');
+        }
+        if (!main) return;
+        main.textContent = formatEur(adj(price));
+        main.classList.remove('doubtful');
+        main.dataset.cardmarket = String(cmd.idProduct);
+        const label = main.previousElementSibling;
+        if (label?.classList.contains('price-label')) {
+          label.textContent = `Prix moyen ${cmd.avg7 ? '7 jours' : '30 jours'} Cardmarket · fiche « ${cmd.name} »${cmd.of > 1 ? ` (${cmd.rank === 1 ? '1ʳᵉ' : cmd.rank + 'ᵉ'} sur ${cmd.of})` : ''} · état ${cond.label}`;
+        }
+        el.querySelectorAll('.price-warning').forEach((w) => w.remove()); // la bonne fiche est trouvée
+        el.querySelector('table.prices.suspect')?.classList.remove('suspect');
+        const code = setInfo?.abbreviation?.official;
+        if (link) link.href = `https://www.cardmarket.com/fr/Pokemon/Products/Search?searchString=${encodeURIComponent(code ? `${cmd.name} ${code}` : cmd.name)}`;
+      });
       // Fiche du set connue : on peut proposer l'image anglaise puis l'image Cardmarket en secours.
       const img = el.querySelector('img');
       if (!img) return;

@@ -40,8 +40,19 @@ const Classeur = (() => {
   const save = () => saveBinder(current, data);
 
   // Prix d'une carte : prix moyen Cardmarket, ou estimation TCGplayer s'il semble erroné (bestPrice).
-  const PRICE_KIND = 'moyenne7j'; // changer cette valeur fait recalculer les prix déjà rangés
+  const PRICE_KIND = 'cardmarket-direct'; // changer cette valeur fait recalculer les prix déjà rangés
   const mainPrice = (card) => bestPrice(card).value;
+  // Prix retenu : moyenne 7 jours de la fiche Cardmarket trouvée par code + numéro, sinon prix TCGdex.
+  async function cardPrice(card, lang) {
+    try {
+      const setId = card.set?.id || card.id.slice(0, card.id.lastIndexOf('-'));
+      await Reco.loadDict();
+      const cmd = await cardmarketDirect(card, await getSetInfo(lang, setId), lang);
+      const direct = cmd && (cmd.avg7 || cmd.avg30 || cmd.avg || cmd.trend);
+      if (direct) return direct;
+    } catch { /* tables indisponibles : prix TCGdex */ }
+    return mainPrice(card);
+  }
 
   // ---------- Affichage ----------
   const isWide = () => window.matchMedia('(min-width: 760px)').matches;
@@ -117,6 +128,7 @@ const Classeur = (() => {
   // ---------- Ajouter, déplacer, retirer ----------
   // Ajoute une carte (fiche TCGdex complète) dans la première case libre du classeur choisi.
   async function add(card, lang, serieId, binderId = current) {
+    const price = await cardPrice(card, lang); // avant de choisir la case (attente réseau)
     // Toujours relu depuis l'appareil : jamais d'écrasement d'une carte déjà rangée.
     const target = loadBinder(binderId);
     if (binderId === current) data = target;
@@ -127,7 +139,7 @@ const Classeur = (() => {
     target.slots[i] = {
       id: card.id, lang, name: card.name, localId: card.localId, image: card.image || null,
       setId, setName: card.set?.name || '', serieId: serieId || null,
-      price: mainPrice(card), priceAt: Date.now(), priceKind: PRICE_KIND,
+      price, priceAt: Date.now(), priceKind: PRICE_KIND,
     };
     target.spread = Math.floor(Math.floor(i / PER_PAGE) / pagesPerSpread());
     if (!saveBinder(binderId, target)) { toast("Impossible d'enregistrer sur cet appareil."); return false; }
@@ -238,10 +250,11 @@ const Classeur = (() => {
         const c = data.slots[i];
         try {
           const card = await getJson(`${API}/${c.lang}/cards/${encodeURIComponent(c.id)}`, { fresh: true });
+          const price = card ? await cardPrice(card, c.lang) : null;
           // Mise à jour sur une copie fraîche : une carte ajoutée entre-temps n'est jamais effacée.
           const d = loadBinder(binderId);
           if (card && d.slots[i]?.id === c.id) {
-            Object.assign(d.slots[i], { price: mainPrice(card), priceAt: Date.now(), priceKind: PRICE_KIND, image: card.image || c.image });
+            Object.assign(d.slots[i], { price, priceAt: Date.now(), priceKind: PRICE_KIND, image: card.image || c.image });
             saveBinder(binderId, d);
           }
         } catch { failed++; }
