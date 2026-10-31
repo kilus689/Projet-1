@@ -170,7 +170,7 @@ const Recherche = (() => {
   });
   ui.results.addEventListener('click', (e) => {
     const thumb = e.target.closest('.card-thumb');
-    if (thumb) { Sets.openCard(thumb.dataset.id, getLang(), thumb.dataset.serie); return; }
+    if (thumb) { Sets.openCard(thumb.dataset.id, getLang(), thumb.dataset.serie, { addToBinder: true }); return; }
     // « voir le set » : ouvre la rubrique Sets dans la langue de la recherche.
     const link = e.target.closest('.search-set-title');
     if (link) try { localStorage.setItem('setsLang', link.dataset.lang); } catch { /* stockage indisponible */ }

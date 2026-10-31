@@ -13,6 +13,13 @@ Application web pour les cartes Pokémon. L'accueil présente les rubriques :
   au plus ancien. Les noms proches sont distingués (« Mew » ne renvoie pas Mewtwo). Toucher une
   carte affiche son prix ; « voir le set » ouvre le set dans la rubrique Sets.
 
+- **📒 Classeur** : ton classeur pro de 20 pages × 9 cases (3×3, 180 cartes), affiché en double
+  page (une page sur téléphone) avec des pages qui tournent (flèches ou glisser du doigt).
+  Le bouton « ＋ Ajouter au classeur » de la Recherche et du Détecteur place la carte dans la
+  première case libre. Valeur totale et valeur de chaque page (prix Cardmarket, actualisés
+  chaque jour ou d'un toucher) ; toucher une carte pour voir son prix, la déplacer ou la retirer.
+  Le classeur est enregistré sur l'appareil uniquement.
+
 D'autres rubriques viendront s'ajouter au menu d'accueil.
 
 ## Détecteur

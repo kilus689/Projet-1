@@ -762,7 +762,7 @@ function renderMissing(names, num, total, hasOthers) {
 function renderResults() {
   els.results.innerHTML = '';
   if (missingBox) els.results.appendChild(missingBox);
-  const render = ({ card, best }) => renderCard(card, best, { lang: shownLang, showSet: true });
+  const render = ({ card, best }) => renderCard(card, best, { lang: shownLang, showSet: true, addToBinder: true });
   // Carte identifiée avec certitude : elle seule s'affiche, les autres sont repliées en dessous.
   const sure = shown.length && shown[0].best;
   (sure ? shown.slice(0, 1) : shown).forEach((x) => els.results.appendChild(render(x)));
@@ -834,10 +834,10 @@ function enableCardmarketFallback(container, lang, onMissing = () => {}) {
   let running = 0;
   const pump = () => {
     while (running < 4 && queue.length) {
-      const { img, id } = queue.shift();
+      const { img, id, cardLang } = queue.shift();
       running++;
       const setId = id.slice(0, id.lastIndexOf('-'));
-      Promise.all([getJson(`${API}/${lang}/cards/${encodeURIComponent(id)}`), getSetInfo(lang, setId)])
+      Promise.all([getJson(`${API}/${cardLang}/cards/${encodeURIComponent(id)}`), getSetInfo(cardLang, setId)])
         .then(([card, setInfo]) => {
           if (stopped) return;
           const urls = card ? cardmarketImages(card, setInfo) : [];
@@ -852,7 +852,7 @@ function enableCardmarketFallback(container, lang, onMissing = () => {}) {
     if (!id || stopped) return;
     if (img.dataset.cmTried) { onMissing(id); return; } // Cardmarket n'a pas d'image non plus
     img.dataset.cmTried = '1';
-    queue.push({ img, id });
+    queue.push({ img, id, cardLang: img.closest('.card-thumb').dataset.lang || lang });
     pump();
   };
   const handler = (e) => tryCardmarket(e.target);
@@ -937,9 +937,10 @@ function getSetInfo(lang, setId) {
 const getSerie = (lang, setId) => getSetInfo(lang, setId).then((set) => set?.serie || null);
 
 // opts.lang : langue de la carte ; opts.showSet : afficher bloc et set (Détecteur) ;
-// opts.serieId : bloc déjà connu (rubrique Sets), pour l'image de secours.
+// opts.serieId : bloc déjà connu (rubrique Sets), pour l'image de secours ;
+// opts.addToBinder : bouton « Ajouter au classeur » (Détecteur, Recherche).
 function renderCard(card, isBest, opts = {}) {
-  const { lang, showSet = false, serieId } = opts;
+  const { lang, showSet = false, serieId, addToBinder = false } = opts;
   const cm = card.pricing?.cardmarket;
   const hasHolo = cm && (cm['trend-holo'] || cm['avg-holo']);
   const mainPrice = cm ? (cm.trend || cm.avg30 || cm.avg || cm['trend-holo'] || cm['avg-holo']) : null;
@@ -992,8 +993,14 @@ function renderCard(card, isBest, opts = {}) {
       ${versions}
       <div class="actions">
         <a class="button secondary" href="${cardmarketUrl(card)}" target="_blank" rel="noopener">Voir sur Cardmarket</a>
+        ${addToBinder && lang ? '<button type="button" class="primary add-binder">＋ Ajouter au classeur</button>' : ''}
       </div>
     </div>`;
+  el.querySelector('.add-binder')?.addEventListener('click', (e) => {
+    Classeur.add(card, lang, serieId);
+    e.currentTarget.textContent = '✓ Dans le classeur';
+    e.currentTarget.disabled = true;
+  });
   const blocEl = el.querySelector('.bloc-name');
   if (lang && card.set?.id) {
     getSetInfo(lang, card.set.id).then((setInfo) => {
@@ -1018,7 +1025,7 @@ document.addEventListener('click', (e) => {
 
 /* ---------- Navigation entre l'accueil et les rubriques ---------- */
 
-const VIEWS = { '': 'view-home', '#accueil': 'view-home', '#detecteur': 'view-detecteur', '#sets': 'view-sets', '#recherche': 'view-recherche' };
+const VIEWS = { '': 'view-home', '#accueil': 'view-home', '#detecteur': 'view-detecteur', '#sets': 'view-sets', '#recherche': 'view-recherche', '#classeur': 'view-classeur' };
 
 function showView() {
   const hash = location.hash;
@@ -1026,10 +1033,12 @@ function showView() {
   if (hash.startsWith('#set/')) target = 'view-set';
   document.querySelectorAll('.view').forEach((v) => { v.hidden = v.id !== target; });
   document.getElementById('card-modal').hidden = true;
+  document.getElementById('slot-menu').hidden = true;
   window.scrollTo(0, 0);
   if (target === 'view-sets') Sets.showSeries();
   if (target === 'view-set') Sets.showSet(decodeURIComponent(hash.slice(5)));
   if (target === 'view-recherche') Recherche.show();
+  if (target === 'view-classeur') Classeur.show();
 }
 window.addEventListener('hashchange', showView);
 showView();

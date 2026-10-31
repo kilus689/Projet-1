@@ -10,7 +10,7 @@
     // Mise à jour automatique : si GitHub a une version plus récente que cette page (gardée en
     // mémoire par Safari ou par l'icône de l'écran d'accueil), on recharge la page à jour.
     (function () {
-      var APP_VERSION = 39;
+      var APP_VERSION = 40;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (v) {
@@ -27,12 +27,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="img/icon-180.png" type="image/png">
   <link rel="apple-touch-icon" href="img/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=39">
+  <link rel="stylesheet" href="style.css?v=40">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="reco.js?v=39" defer></script>
-  <script src="sets.js?v=39" defer></script>
-  <script src="recherche.js?v=39" defer></script>
-  <script src="app.js?v=39" defer></script>
+  <script src="reco.js?v=40" defer></script>
+  <script src="sets.js?v=40" defer></script>
+  <script src="recherche.js?v=40" defer></script>
+  <script src="classeur.js?v=40" defer></script>
+  <script src="app.js?v=40" defer></script>
 </head>
 <body>
   <!-- Accueil -->
@@ -60,6 +61,12 @@
         <span class="menu-icon search-icon">🔍</span>
         <span class="menu-text"><strong>Recherche</strong>
           <small>Toutes les cartes d'un Pokémon, dans tous les blocs et tous les sets</small></span>
+        <span class="menu-arrow">›</span>
+      </a>
+      <a class="menu-item" href="#classeur">
+        <span class="menu-icon search-icon">📒</span>
+        <span class="menu-text"><strong>Classeur</strong>
+          <small>Ton classeur pro 3×3 : 20 pages, 180 cartes, et sa valeur totale</small></span>
         <span class="menu-arrow">›</span>
       </a>
     </nav>
@@ -231,6 +238,39 @@
       <div id="search-poke-results"></div>
     </main>
   </div>
+
+  <!-- Classeur : 20 pages de 3×3 cases -->
+  <div id="view-classeur" class="view" hidden>
+    <header class="topbar">
+      <a href="#accueil" class="back">‹ Accueil</a>
+      <h2>📒 Classeur</h2>
+      <span class="topbar-spacer"></span>
+    </header>
+    <main class="binder-main">
+      <div class="card-box binder-summary">
+        <div><small>Valeur totale</small><strong id="binder-total">0,00 €</strong></div>
+        <div><small>Rempli</small><strong id="binder-count">0 / 180 cartes</strong></div>
+        <button id="binder-refresh" type="button" class="secondary">↻ Actualiser les prix</button>
+      </div>
+      <p id="binder-status" class="status" aria-live="polite"></p>
+      <div id="binder" class="binder">
+        <div id="binder-spread" class="binder-spread"></div>
+      </div>
+      <div class="binder-nav">
+        <button id="binder-prev" type="button" class="secondary" aria-label="Pages précédentes">‹</button>
+        <span id="binder-where"></span>
+        <button id="binder-next" type="button" class="secondary" aria-label="Pages suivantes">›</button>
+      </div>
+    </main>
+  </div>
+
+  <div id="slot-menu" class="modal" hidden>
+    <div class="modal-box slot-menu-box card-box">
+      <h3 id="slot-menu-title"></h3>
+      <div id="slot-menu-body"></div>
+    </div>
+  </div>
+  <div id="toast" class="toast" hidden></div>
 
   <div id="card-modal" class="modal" hidden>
     <div class="modal-box">

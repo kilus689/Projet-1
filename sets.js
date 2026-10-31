@@ -180,7 +180,7 @@ const Sets = (() => {
   }
 
   // Fenêtre de prix d'une carte (aussi utilisée par la rubrique Recherche).
-  async function openCard(id, lang = getLang(), serieId = currentSerieId) {
+  async function openCard(id, lang = getLang(), serieId = currentSerieId, extra = {}) {
     ui.modal.hidden = false;
     ui.modalBody.innerHTML = '<p class="status">Chargement du prix…</p>';
     try {
@@ -188,7 +188,7 @@ const Sets = (() => {
       if (!card) throw new Error('carte introuvable');
       englishName = ''; // pas de nom anglais connu ici (utilisé par le lien Cardmarket)
       ui.modalBody.innerHTML = '';
-      ui.modalBody.appendChild(renderCard(card, false, { lang, serieId }));
+      ui.modalBody.appendChild(renderCard(card, false, { lang, serieId, ...extra }));
     } catch (err) {
       ui.modalBody.innerHTML = `<p class="status error">Impossible de charger cette carte : ${escapeHtml(err.message)}</p>`;
     }
