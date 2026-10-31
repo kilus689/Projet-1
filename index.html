@@ -10,7 +10,7 @@
     // Mise à jour automatique : si GitHub a une version plus récente que cette page (gardée en
     // mémoire par Safari ou par l'icône de l'écran d'accueil), on recharge la page à jour.
     (function () {
-      var APP_VERSION = 40;
+      var APP_VERSION = 42;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (v) {
@@ -27,13 +27,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="img/icon-180.png" type="image/png">
   <link rel="apple-touch-icon" href="img/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=40">
+  <link rel="stylesheet" href="style.css?v=42">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="reco.js?v=40" defer></script>
-  <script src="sets.js?v=40" defer></script>
-  <script src="recherche.js?v=40" defer></script>
-  <script src="classeur.js?v=40" defer></script>
-  <script src="app.js?v=40" defer></script>
+  <script src="reco.js?v=42" defer></script>
+  <script src="sets.js?v=42" defer></script>
+  <script src="recherche.js?v=42" defer></script>
+  <script src="classeur.js?v=42" defer></script>
+  <script src="app.js?v=42" defer></script>
 </head>
 <body>
   <!-- Accueil -->
@@ -66,7 +66,7 @@
       <a class="menu-item" href="#classeur">
         <span class="menu-icon search-icon">📒</span>
         <span class="menu-text"><strong>Classeur</strong>
-          <small>Ton classeur pro 3×3 : 20 pages, 180 cartes, et sa valeur totale</small></span>
+          <small>Tes classeurs pro 3×3 : My folder et My dream, avec leur valeur</small></span>
         <span class="menu-arrow">›</span>
       </a>
     </nav>
@@ -247,6 +247,16 @@
       <span class="topbar-spacer"></span>
     </header>
     <main class="binder-main">
+      <!-- Étagère : les deux classeurs fermés -->
+      <div id="binder-shelf" class="binder-shelf"></div>
+
+      <!-- Classeur ouvert -->
+      <div id="binder-open" hidden>
+      <div class="binder-openbar">
+        <a href="#classeur" class="back">‹ Classeurs</a>
+        <h3 id="binder-title"></h3>
+        <span class="topbar-spacer"></span>
+      </div>
       <div class="card-box binder-summary">
         <div><small>Valeur totale</small><strong id="binder-total">0,00 €</strong></div>
         <div><small>Rempli</small><strong id="binder-count">0 / 180 cartes</strong></div>
@@ -260,6 +270,7 @@
         <button id="binder-prev" type="button" class="secondary" aria-label="Pages précédentes">‹</button>
         <span id="binder-where"></span>
         <button id="binder-next" type="button" class="secondary" aria-label="Pages suivantes">›</button>
+      </div>
       </div>
     </main>
   </div>

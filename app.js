@@ -997,9 +997,8 @@ function renderCard(card, isBest, opts = {}) {
       </div>
     </div>`;
   el.querySelector('.add-binder')?.addEventListener('click', (e) => {
-    Classeur.add(card, lang, serieId);
-    e.currentTarget.textContent = '✓ Dans le classeur';
-    e.currentTarget.disabled = true;
+    const btn = e.currentTarget;
+    Classeur.chooseAndAdd(card, lang, serieId, (title) => { btn.textContent = `✓ Dans ${title}`; });
   });
   const blocEl = el.querySelector('.bloc-name');
   if (lang && card.set?.id) {
@@ -1031,6 +1030,7 @@ function showView() {
   const hash = location.hash;
   let target = VIEWS[hash] || 'view-home';
   if (hash.startsWith('#set/')) target = 'view-set';
+  if (hash.startsWith('#classeur/')) target = 'view-classeur';
   document.querySelectorAll('.view').forEach((v) => { v.hidden = v.id !== target; });
   document.getElementById('card-modal').hidden = true;
   document.getElementById('slot-menu').hidden = true;
@@ -1038,7 +1038,7 @@ function showView() {
   if (target === 'view-sets') Sets.showSeries();
   if (target === 'view-set') Sets.showSet(decodeURIComponent(hash.slice(5)));
   if (target === 'view-recherche') Recherche.show();
-  if (target === 'view-classeur') Classeur.show();
+  if (target === 'view-classeur') Classeur.show(hash.startsWith('#classeur/') ? hash.slice(10) : '');
 }
 window.addEventListener('hashchange', showView);
 showView();
