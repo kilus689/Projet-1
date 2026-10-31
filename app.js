@@ -930,6 +930,30 @@ function averagePrice(cm, holo = false) {
   return null;
 }
 
+// Contrôle par TCGplayer : TCGdex relie parfois une carte à la mauvaise fiche Cardmarket
+// (ex : Lugia EX Full Art 94/98 reliée à la Lugia EX normale 68/98 → 18 € au lieu de ~300 €).
+// Si le prix TCGplayer (converti en euros) et le prix Cardmarket diffèrent de plus de 3 fois,
+// on considère le prix Cardmarket comme suspect et on affiche l'estimation TCGplayer.
+const USD_TO_EUR = 0.92; // taux fixe approximatif (pas de taux de change en direct)
+const formatUsd = (v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' $';
+function tcgplayerUsd(card) {
+  const tp = card.pricing?.tcgplayer;
+  if (!tp) return null;
+  const values = Object.values(tp).filter((x) => x && typeof x === 'object')
+    .map((x) => x.marketPrice || x.midPrice).filter((v) => typeof v === 'number' && v > 0);
+  return values.length ? Math.max(...values) : null; // version principale = la plus chère (holo, Full Art…)
+}
+// Prix à retenir pour une carte : { value, source: 'cardmarket' | 'tcgplayer', cardmarket, usd, suspicious }
+function bestPrice(card) {
+  const cardmarket = averagePrice(card.pricing?.cardmarket);
+  const usd = tcgplayerUsd(card);
+  const tcgEur = usd ? usd * USD_TO_EUR : null;
+  const suspicious = Boolean(cardmarket && tcgEur && Math.max(cardmarket, tcgEur) >= 10
+    && Math.max(cardmarket, tcgEur) / Math.min(cardmarket, tcgEur) >= 3);
+  if (suspicious || (!cardmarket && tcgEur)) return { value: tcgEur, source: 'tcgplayer', cardmarket, usd, suspicious };
+  return { value: cardmarket, source: 'cardmarket', cardmarket, usd, suspicious: false };
+}
+
 // Sur Cardmarket, la version reverse d'une carte est dans les champs « -holo » du même produit.
 function variantPrice(v) {
   const cm = v.pricing?.cardmarket;
@@ -957,7 +981,8 @@ function renderCard(card, isBest, opts = {}) {
   const { lang, showSet = false, serieId, addToBinder = false } = opts;
   const cm = card.pricing?.cardmarket;
   const hasHolo = cm && (cm['trend-holo'] || cm['avg-holo']);
-  const mainPrice = averagePrice(cm);
+  const best = bestPrice(card);
+  const mainPrice = best.value;
   const cond = CONDITIONS[els.condition.value] || CONDITIONS.NM;
   const adj = (v) => (typeof v === 'number' ? v * cond.factor : v);
 
@@ -966,11 +991,17 @@ function renderCard(card, isBest, opts = {}) {
   const row = (label, normal, holo) => (!has(normal) && !(hasHolo && has(holo))) ? ''
     : `<tr><th>${label}</th><td>${formatEur(adj(normal))}</td>${hasHolo ? `<td>${formatEur(adj(holo))}</td>` : ''}</tr>`;
 
+  const warning = best.suspicious ? `
+    <p class="price-warning">⚠️ Le prix Cardmarket de la base (<s>${formatEur(best.cardmarket)}</s>) semble être celui
+      d'une <strong>autre version</strong> de cette carte : il ne correspond pas du tout au prix TCGplayer
+      (${formatUsd(best.usd)}). L'app affiche donc l'estimation TCGplayer. Vérifie sur Cardmarket.</p>` : '';
   const prices = mainPrice ? `
-    <p class="price-label">Prix moyen Cardmarket · état ${cond.label}</p>
+    <p class="price-label">${best.source === 'tcgplayer' ? 'Estimation d\'après TCGplayer (≈ ' + formatUsd(best.usd) + ')' : 'Prix moyen Cardmarket'} · état ${cond.label}</p>
     <p class="price-main">${formatEur(adj(mainPrice))}</p>
     ${cond.factor < 1 ? `<p class="price-condition">Estimation (≈ ${Math.round(cond.factor * 100)} % du prix Near Mint de ${formatEur(mainPrice)})</p>` : ''}
-    <table class="prices">
+    ${warning}
+    ${best.suspicious ? '<p class="price-label">Détail Cardmarket (sans doute une autre version) :</p>' : ''}
+    ${!cm ? '<p class="price-label">Pas de prix Cardmarket pour cette carte.</p>' : `<table class="prices${best.suspicious ? ' suspect' : ''}">
       ${hasHolo ? '<tr><th></th><td>Normale</td><td>Holo/Reverse</td></tr>' : ''}
       ${row('Moyenne 30 j', cm.avg30, cm['avg30-holo'])}
       ${row('Prix moyen de vente', cm.avg, cm['avg-holo'])}
@@ -978,7 +1009,7 @@ function renderCard(card, isBest, opts = {}) {
       ${row('Moyenne 1 j', cm.avg1, cm['avg1-holo'])}
       ${row('Tendance', cm.trend, cm['trend-holo'])}
     </table>
-    ${cm.updated ? `<p class="price-label">Mis à jour le ${new Date(cm.updated).toLocaleDateString('fr-FR')}</p>` : ''}`
+    ${cm.updated ? `<p class="price-label">Mis à jour le ${new Date(cm.updated).toLocaleDateString('fr-FR')}</p>` : ''}`}`
     : '<p class="no-price">Pas de prix Cardmarket disponible pour cette carte : vérifie directement sur Cardmarket.</p>';
 
   const variants = (card.variants_detailed || []).map((v) => ({ label: variantLabel(v), price: variantPrice(v) })).filter((v) => v.price);

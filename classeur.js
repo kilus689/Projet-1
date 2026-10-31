@@ -39,9 +39,9 @@ const Classeur = (() => {
   let data = loadBinder(current);
   const save = () => saveBinder(current, data);
 
-  // Prix d'une carte : prix moyen Cardmarket (même règle que la fenêtre de prix).
-  const PRICE_KIND = 'moyenne';
-  const mainPrice = (card) => averagePrice(card.pricing?.cardmarket);
+  // Prix d'une carte : prix moyen Cardmarket, ou estimation TCGplayer s'il semble erroné (bestPrice).
+  const PRICE_KIND = 'moyenne+controle';
+  const mainPrice = (card) => bestPrice(card).value;
 
   // ---------- Affichage ----------
   const isWide = () => window.matchMedia('(min-width: 760px)').matches;

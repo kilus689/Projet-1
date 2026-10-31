@@ -437,3 +437,10 @@ details.others summary { cursor: pointer; color: var(--muted); font-weight: 600;
 @keyframes ouvreClasseur { from { transform: perspective(1400px) rotateY(-70deg); opacity: .3; } to { transform: none; opacity: 1; } }
 .choose-binder small { opacity: .75; font-weight: 400; }
 #slot-menu { z-index: 25; } /* au-dessus de la fenêtre de prix (choix du classeur) */
+
+.price-warning {
+  margin: 8px 0; padding: 10px 12px; border-radius: 10px; font-size: .88rem; line-height: 1.35;
+  background: #fff4d6; color: #6b4e00; border: 1px solid #f1d58a;
+}
+@media (prefers-color-scheme: dark) { .price-warning { background: #3a3014; color: #f3dc9a; border-color: #6b5718; } }
+table.prices.suspect { opacity: .6; }
