@@ -1,13 +1,12 @@
 """Construit les tables de prix Cardmarket utilisées par l'app (dossier data/cardmarket/).
 
 Cardmarket publie chaque jour deux fichiers officiels :
-- la liste des cartes Pokémon (idProduct, nom), dont le nom contient le code d'extension et le
-  numéro, ex « Lugia EX (AOR 94) » ou « Mew (30C R/RGB) » ;
+- la liste des cartes Pokémon (idProduct, nom + attaques, idExpansion) ;
 - le guide des prix (moyennes 1, 7 et 30 jours, tendance…) par idProduct.
-On les relie pour obtenir, par code d'extension, une table « numéro → prix » : l'app y retrouve
-une carte par son code et son numéro, et affiche la moyenne 7 jours de la bonne fiche.
+On les relie et on range les fiches par extension Cardmarket (un fichier par idExpansion) :
+l'app y retrouve la carte par son nom et son rang, et affiche la moyenne 7 jours.
 """
-import json, os, re, sys, urllib.request, gzip, io
+import json, os, sys, urllib.request, gzip, io
 
 BASE = 'https://downloads.s3.cardmarket.com/productCatalog'
 PRODUCTS = f'{BASE}/productList/products_singles_6.json'
@@ -33,38 +32,36 @@ print('exemples de produits :', json.dumps(plist[:3], ensure_ascii=False))
 print('exemple de prix :', json.dumps(glist[:1], ensure_ascii=False))
 
 guide = {g['idProduct']: g for g in glist if 'idProduct' in g}
-# « Nom (CODE NUMÉRO) » — le numéro peut contenir des lettres ou une barre (TG01, GG35, R/RGB, 059)
-NAME_RE = re.compile(r'^(?P<name>.+?)\s*\((?P<code>[A-Za-z0-9:\.\-]+)\s+(?P<num>[A-Za-z0-9/\-]+)\)\s*$')
-tables, unparsed = {}, []
+# Le fichier des produits ne contient pas le numéro des cartes, mais l'extension Cardmarket
+# (idExpansion) et le nom, suivi des attaques entre crochets : « Lugia EX [Aero Ball | Deep Hurricane] ».
+# On range donc les fiches par extension ; l'app y retrouve la carte par son nom et, quand
+# plusieurs fiches ont le même nom (ex : Lugia EX normale et Full Art), par leur ordre.
+by_exp = {}
 for p in plist:
-    m = NAME_RE.match(p.get('name', ''))
-    if not m:
-        if len(unparsed) < 15: unparsed.append(p.get('name'))
+    if p.get('idCategory') != 51:  # cartes Pokémon à l'unité uniquement
         continue
-    g = guide.get(p.get('idProduct'))
-    if not g:
-        continue
-    code = m['code'].upper()
-    num = m['num'].upper().lstrip('0') or '0'
-    entry = [p['idProduct'], m['name'],
-             g.get('avg7'), g.get('avg30'), g.get('avg'), g.get('trend'),
-             g.get('avg7-holo'), g.get('avg30-holo')]
-    tables.setdefault(code, {}).setdefault(num, []).append(entry)
-
-print(f'{sum(len(t) for t in tables.values())} cartes reliées dans {len(tables)} extensions')
-print('noms non reconnus (exemples) :', unparsed)
-for code in ('AOR', '30C', 'CRZ', 'MEW', 'SVI'):
-    t = tables.get(code, {})
-    print(f'  {code}: {len(t)} numéros', '— ex.', json.dumps(dict(list(t.items())[:2]), ensure_ascii=False) if t else '')
+    g = guide.get(p.get('idProduct')) or {}
+    full = p.get('name', '')
+    base = full.split(' [')[0].strip()
+    by_exp.setdefault(p.get('idExpansion'), []).append([
+        p['idProduct'], base, full[len(base):].strip(' []') or None,
+        g.get('avg7'), g.get('avg30'), g.get('avg'), g.get('trend'), g.get('avg7-holo'), g.get('avg30-holo')])
+for rows in by_exp.values():
+    rows.sort(key=lambda r: r[0])  # ordre de création chez Cardmarket
+print(f'{sum(len(r) for r in by_exp.values())} cartes dans {len(by_exp)} extensions')
+for exp in (1660, 6601):
+    rows = by_exp.get(exp, [])
+    print(f'extension {exp} : {len(rows)} fiches ; exemples :', json.dumps(rows[:3], ensure_ascii=False))
+    print('   « Lugia » / « Charizard » :', json.dumps([r for r in rows if r[1].startswith(('Lugia', 'Charizard'))], ensure_ascii=False))
 
 os.makedirs(OUT, exist_ok=True)
 for f in os.listdir(OUT):
     if f.endswith('.json'): os.remove(os.path.join(OUT, f))
-safe = lambda c: re.sub(r'[^A-Za-z0-9_-]', '_', c)
-for code, table in tables.items():
-    with open(os.path.join(OUT, f'{safe(code)}.json'), 'w', encoding='utf-8') as f:
-        json.dump(table, f, ensure_ascii=False, separators=(',', ':'))
+for exp, rows in by_exp.items():
+    with open(os.path.join(OUT, f'{exp}.json'), 'w', encoding='utf-8') as f:
+        json.dump(rows, f, ensure_ascii=False, separators=(',', ':'))
 with open(os.path.join(OUT, 'index.json'), 'w', encoding='utf-8') as f:
-    json.dump({'createdAt': prices.get('createdAt'), 'champs': ['idProduct', 'nom', 'avg7', 'avg30', 'avg', 'trend', 'avg7-holo', 'avg30-holo'],
-               'extensions': {c: safe(c) for c in sorted(tables)}}, f, ensure_ascii=False, separators=(',', ':'))
+    json.dump({'createdAt': prices.get('createdAt'),
+               'champs': ['idProduct', 'nom', 'attaques', 'avg7', 'avg30', 'avg', 'trend', 'avg7-holo', 'avg30-holo'],
+               'extensions': sorted(e for e in by_exp if e is not None)}, f, separators=(',', ':'))
 print('écrit dans', OUT)
