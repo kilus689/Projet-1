@@ -345,7 +345,7 @@ details.others summary { cursor: pointer; color: var(--muted); font-weight: 600;
 .binder-summary small { color: var(--muted); }
 .binder-summary strong { font-size: 1.4rem; }
 #binder-total { color: var(--good); }
-.binder-summary button { margin-left: auto; flex: 0 1 auto; }
+
 .binder {
   perspective: 1800px;
   background: linear-gradient(135deg, #2b2f3a, #1a1d25);

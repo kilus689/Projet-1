@@ -1,7 +1,8 @@
 'use strict';
 
 /* Rubrique « Classeur » : le classeur pro de 20 pages × 9 cases (3×3), en double page.
-   Enregistré sur l'appareil (localStorage). Utilise getJson, API, escapeHtml, formatEur,
+   Aucun prix n'y est affiché (le prix d'une carte se voit en la touchant).
+   Enregistré sur l'appareil (localStorage). Utilise getJson, API, escapeHtml,
    cardImgHtml, imageSources, enableCardmarketFallback (app.js) et Sets.openCard (sets.js). */
 
 const Classeur = (() => {
@@ -18,7 +19,7 @@ const Classeur = (() => {
   const ui = {
     view: $('view-classeur'), binder: $('binder'), spread: $('binder-spread'),
     prev: $('binder-prev'), next: $('binder-next'), where: $('binder-where'),
-    total: $('binder-total'), count: $('binder-count'), refresh: $('binder-refresh'),
+    count: $('binder-count'),
     status: $('binder-status'), menu: $('slot-menu'), menuTitle: $('slot-menu-title'),
     menuBody: $('slot-menu-body'), toast: $('toast'),
     shelf: $('binder-shelf'), open: $('binder-open'), title: $('binder-title'),
@@ -58,7 +59,6 @@ const Classeur = (() => {
   const isWide = () => window.matchMedia('(min-width: 760px)').matches;
   const pagesPerSpread = () => (isWide() ? 2 : 1);
   const spreadCount = () => Math.ceil(PAGES / pagesPerSpread());
-  const pageValue = (p) => data.slots.slice(p * PER_PAGE, (p + 1) * PER_PAGE).reduce((s, c) => s + (c?.price || 0), 0);
 
   function slotHtml(i) {
     const c = data.slots[i];
@@ -75,7 +75,7 @@ const Classeur = (() => {
     const cells = Array.from({ length: PER_PAGE }, (_, k) => slotHtml(p * PER_PAGE + k)).join('');
     return `<div class="binder-page">
       <div class="binder-grid">${cells}</div>
-      <p class="binder-page-foot">Page ${p + 1} · ${data.slots.slice(p * PER_PAGE, (p + 1) * PER_PAGE).some(Boolean) ? formatEur(pageValue(p)) : 'vide'}</p>
+      <p class="binder-page-foot">Page ${p + 1}</p>
     </div>`;
   }
 
@@ -90,7 +90,6 @@ const Classeur = (() => {
     ui.prev.disabled = data.spread === 0;
     ui.next.disabled = data.spread >= spreadCount() - 1;
     const filled = data.slots.filter(Boolean);
-    ui.total.textContent = formatEur(filled.reduce((s, c) => s + (c.price || 0), 0));
     ui.count.textContent = `${filled.length} / ${SIZE} cartes`;
     stopFallback?.();
     stopFallback = enableCardmarketFallback(ui.spread, 'fr'); // la langue de chaque carte est lue sur sa case
@@ -175,8 +174,8 @@ const Classeur = (() => {
     if (!c) return;
     ui.menuTitle.textContent = `${c.name} · page ${Math.floor(i / PER_PAGE) + 1}, case ${(i % PER_PAGE) + 1}`;
     ui.menuBody.innerHTML = `
-      <p class="meta">${escapeHtml(c.setName)} · n° ${escapeHtml(c.localId)} · ${formatEur(c.price)}</p>
-      <button type="button" class="primary" data-act="price">Voir le prix et la carte en grand</button>
+      <p class="meta">${escapeHtml(c.setName)} · n° ${escapeHtml(c.localId)}</p>
+      <button type="button" class="primary" data-act="price">Voir la carte et son prix</button>
       <button type="button" class="secondary" data-act="move">Déplacer vers une autre case</button>
       <button type="button" class="secondary danger" data-act="remove">Retirer du classeur</button>
       <button type="button" class="secondary" data-act="close">Fermer</button>`;
@@ -241,7 +240,6 @@ const Classeur = (() => {
     const todo = data.slots.map((c, i) => (c && (!onlyStale || stale(c)) ? i : -1)).filter((i) => i >= 0);
     if (!todo.length) { if (!onlyStale) setStatus('Aucune carte dans le classeur.'); return; }
     refreshing = true;
-    ui.refresh.disabled = true;
     let done = 0, failed = 0;
     setStatus(`Actualisation des prix (0/${todo.length})…`);
     const worker = async () => {
@@ -265,7 +263,6 @@ const Classeur = (() => {
     await Promise.all([worker(), worker(), worker(), worker()]);
     if (binderId === current) data = loadBinder(binderId);
     refreshing = false;
-    ui.refresh.disabled = false;
     if (!ui.view.hidden) render();
     setStatus(failed ? `Prix actualisés, sauf ${failed} carte${failed > 1 ? 's' : ''} (connexion ?).` : 'Prix actualisés.', failed > 0);
   }
@@ -274,13 +271,11 @@ const Classeur = (() => {
   function renderShelf() {
     ui.shelf.innerHTML = Object.entries(BINDERS).map(([id, b]) => {
       const cards = loadBinder(id).slots.filter(Boolean);
-      const value = cards.reduce((t, c) => t + (c.price || 0), 0);
       return `<a class="binder-cover cover-${b.theme}" href="#classeur/${id}" aria-label="Ouvrir ${escapeHtml(b.title)}">
         <span class="cover-strap"></span>
         <span class="cover-label">
           <strong>${escapeHtml(b.title)}</strong>
           <small>${cards.length} / ${SIZE} cartes</small>
-          <small class="cover-value">${cards.length ? formatEur(value) : 'vide'}</small>
         </span>
         <span class="cover-badge">3×3 · 20 pages</span>
       </a>`;
@@ -305,7 +300,6 @@ const Classeur = (() => {
   // ---------- Branchements ----------
   ui.prev.addEventListener('click', () => turn(-1));
   ui.next.addEventListener('click', () => turn(1));
-  ui.refresh.addEventListener('click', () => refreshPrices(false));
   window.addEventListener('resize', () => { if (!ui.view.hidden && !ui.open.hidden) render(); });
   // Glisser le doigt vers la gauche ou la droite pour tourner les pages.
   let touchX = null;
@@ -334,7 +328,7 @@ const Classeur = (() => {
         // Ouverture : la couverture s'ouvre, puis les pages apparaissent.
         ui.binder.classList.add('opening');
         setTimeout(() => ui.binder.classList.remove('opening'), 600);
-        refreshPrices(true);
+        // (les prix ne sont plus affichés dans les classeurs : pas d'actualisation automatique)
       }
     },
   };

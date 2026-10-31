@@ -10,7 +10,7 @@
     // Mise à jour automatique : si GitHub a une version plus récente que cette page (gardée en
     // mémoire par Safari ou par l'icône de l'écran d'accueil), on recharge la page à jour.
     (function () {
-      var APP_VERSION = 46;
+      var APP_VERSION = 47;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (v) {
@@ -27,13 +27,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="img/icon-180.png" type="image/png">
   <link rel="apple-touch-icon" href="img/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=46">
+  <link rel="stylesheet" href="style.css?v=47">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="reco.js?v=46" defer></script>
-  <script src="sets.js?v=46" defer></script>
-  <script src="recherche.js?v=46" defer></script>
-  <script src="classeur.js?v=46" defer></script>
-  <script src="app.js?v=46" defer></script>
+  <script src="reco.js?v=47" defer></script>
+  <script src="sets.js?v=47" defer></script>
+  <script src="recherche.js?v=47" defer></script>
+  <script src="classeur.js?v=47" defer></script>
+  <script src="app.js?v=47" defer></script>
 </head>
 <body>
   <!-- Accueil -->
@@ -66,7 +66,7 @@
       <a class="menu-item" href="#classeur">
         <span class="menu-icon search-icon">📒</span>
         <span class="menu-text"><strong>Classeur</strong>
-          <small>Tes classeurs pro 3×3 : My folder et My dream, avec leur valeur</small></span>
+          <small>Tes classeurs pro 3×3 : My folder et My dream</small></span>
         <span class="menu-arrow">›</span>
       </a>
     </nav>
@@ -258,9 +258,7 @@
         <span class="topbar-spacer"></span>
       </div>
       <div class="card-box binder-summary">
-        <div><small>Valeur totale</small><strong id="binder-total">0,00 €</strong></div>
         <div><small>Rempli</small><strong id="binder-count">0 / 180 cartes</strong></div>
-        <button id="binder-refresh" type="button" class="secondary">↻ Actualiser les prix</button>
       </div>
       <p id="binder-status" class="status" aria-live="polite"></p>
       <div id="binder" class="binder">
