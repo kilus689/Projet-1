@@ -45,6 +45,8 @@ const Classeur = (() => {
   const mainPrice = (card) => bestPrice(card).value;
   // Prix retenu : moyenne 7 jours de la fiche Cardmarket trouvée par code + numéro, sinon prix TCGdex.
   async function cardPrice(card, lang) {
+    const fp = await fixedPrice(card.id);
+    if (fp) return fp.value;
     try {
       const setId = card.set?.id || card.id.slice(0, card.id.lastIndexOf('-'));
       await Reco.loadDict();

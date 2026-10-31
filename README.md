@@ -65,6 +65,13 @@ de ce nom dans le set correspond à la n-ième fiche créée chez Cardmarket. El
 **moyenne 7 jours** de cette fiche, même quand TCGdex est relié à la mauvaise. En cas de doute (nombre
 de fiches différent), elle garde le prix TCGdex.
 
+## Prix fixés à la main
+
+- `data/prix-fixes.json` : prix fixés dans l'app (ex : Lugia EX 94/98 Origines Antiques, `xy7-94`, à 200 €).
+- Bouton **« ✏️ Modifier le prix »** dans la fenêtre de prix : fixe le prix d'une carte sur l'appareil
+  (champ vide = retour au prix Cardmarket).
+- Un prix fixé passe avant tous les autres (fiche de prix, Détecteur, classeurs).
+
 ## Données et mises à jour
 
 Les prix et les images ne sont pas stockés dans l'app : ils sont lus **en direct** dans TCGdex

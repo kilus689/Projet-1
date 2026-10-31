@@ -1,0 +1,6 @@
+{
+  "info": "Prix fixés à la main (en euros, état Near Mint). Ils remplacent le prix Cardmarket dans toute l'app. Clé : identifiant TCGdex de la carte.",
+  "cartes": {
+    "xy7-94": { "prix": 200, "carte": "Lugia EX 94/98 Full Art, Origines Antiques" }
+  }
+}

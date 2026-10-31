@@ -994,6 +994,29 @@ function cmFetch(file) {
 const cmNorm = (s) => normalize(String(s || '').replace(/[-–]/g, ' ')).replace(/\s+/g, ' ').trim();
 const localNum = (id) => { const n = parseInt(id, 10); return isNaN(n) ? Infinity : n; };
 
+// ---------- Prix fixés à la main ----------
+// data/prix-fixes.json (fixés dans l'app) et prix choisis sur l'appareil (bouton « Modifier le prix »).
+// Ils passent avant tout autre prix. Clé : identifiant TCGdex de la carte (ex : xy7-94).
+const LOCAL_PRICES = 'prixPerso';
+let fixedPricesPromise = null;
+const fixedPrices = () => (fixedPricesPromise ??= fetch('data/prix-fixes.json', { cache: 'no-cache' })
+  .then((r) => (r.ok ? r.json() : {})).then((d) => d.cartes || {}).catch(() => ({})));
+function localPrices() {
+  try { return JSON.parse(localStorage.getItem(LOCAL_PRICES) || '{}'); } catch { return {}; }
+}
+function setLocalPrice(id, value) {
+  const all = localPrices();
+  if (value == null) delete all[id]; else all[id] = { prix: value, le: new Date().toISOString() };
+  try { localStorage.setItem(LOCAL_PRICES, JSON.stringify(all)); } catch { /* stockage indisponible */ }
+}
+// Prix fixé d'une carte : { value, source: 'appareil' | 'app' } ou null.
+async function fixedPrice(id) {
+  const mine = localPrices()[id];
+  if (typeof mine?.prix === 'number') return { value: mine.prix, source: 'appareil' };
+  const app = (await fixedPrices())[id];
+  return typeof app?.prix === 'number' ? { value: app.prix, source: 'app' } : null;
+}
+
 // Fiche Cardmarket d'une carte : { idProduct, name, avg7, avg30, avg, trend, holo7, rank, of } ou null.
 async function cardmarketDirect(card, setInfo, lang) {
   const exp = setInfo?.thirdParty?.cardmarket;
@@ -1089,9 +1112,45 @@ function renderCard(card, isBest, opts = {}) {
       ${versions}
       <div class="actions">
         <a class="button secondary" href="${cardmarketUrl(card)}" target="_blank" rel="noopener">Voir sur Cardmarket</a>
+        <button type="button" class="secondary edit-price">✏️ Modifier le prix</button>
         ${addToBinder && lang ? '<button type="button" class="primary add-binder">＋ Ajouter au classeur</button>' : ''}
       </div>
     </div>`;
+  // Prix fixé (fichier de l'app ou choisi sur l'appareil) : il passe avant tous les autres.
+  const showFixed = (fp) => {
+    let main = el.querySelector('.price-main');
+    if (!main) {
+      const np = el.querySelector('.no-price');
+      if (!np) return;
+      np.insertAdjacentHTML('afterend', '<p class="price-label"></p><p class="price-main"></p>');
+      np.remove();
+      main = el.querySelector('.price-main');
+    }
+    main.textContent = formatEur(adj(fp.value));
+    main.classList.remove('doubtful');
+    main.dataset.fixed = '1';
+    const label = main.previousElementSibling;
+    if (label?.classList.contains('price-label')) {
+      label.textContent = `Prix fixé ${fp.source === 'appareil' ? 'par toi' : 'dans l\'app'} · état ${cond.label}`;
+    }
+    el.querySelectorAll('.price-warning').forEach((w) => w.remove());
+  };
+  fixedPrice(card.id).then((fp) => { if (fp) showFixed(fp); });
+  el.querySelector('.edit-price')?.addEventListener('click', async () => {
+    const current = (await fixedPrice(card.id))?.value ?? mainPrice;
+    const answer = prompt(`Prix de ${card.name} (n° ${card.localId}) en euros, état Near Mint.\nLaisse vide pour revenir au prix Cardmarket.`,
+      current ? String(Math.round(current * 100) / 100).replace('.', ',') : '');
+    if (answer === null) return; // annulé
+    const value = parseFloat(answer.replace(',', '.').replace(/[^0-9.]/g, ''));
+    if (answer.trim() && !(value > 0)) { alert('Prix non reconnu. Exemple : 200 ou 12,50'); return; }
+    setLocalPrice(card.id, answer.trim() ? value : null);
+    const fp = await fixedPrice(card.id);
+    if (fp) showFixed(fp);
+    else { // retour au prix Cardmarket : on réaffiche la fiche
+      const fresh = renderCard(card, isBest, opts);
+      el.replaceWith(fresh);
+    }
+  });
   el.querySelector('.add-binder')?.addEventListener('click', (e) => {
     const btn = e.currentTarget;
     Classeur.chooseAndAdd(card, lang, serieId, (title) => { btn.textContent = `✓ Dans ${title}`; });
@@ -1105,7 +1164,8 @@ function renderCard(card, isBest, opts = {}) {
       for (const t of twins) {
         const other = await getJson(`${API}/${lang}/cards/${encodeURIComponent(t.id)}`).catch(() => null);
         if (other?.pricing?.cardmarket?.idProduct !== idProduct) continue;
-        if (el.querySelector('.price-main')?.dataset.cardmarket) break; // prix direct Cardmarket déjà trouvé
+        const m = el.querySelector('.price-main');
+        if (m?.dataset.cardmarket || m?.dataset.fixed) break; // prix direct Cardmarket ou prix fixé : pas d'alerte
         const box = document.createElement('p');
         box.className = 'price-warning';
         box.innerHTML = `⚠️ Erreur de la base de cartes : cette carte (n° ${escapeHtml(card.localId)}) et la n° ${escapeHtml(other.localId)}
@@ -1126,7 +1186,7 @@ function renderCard(card, isBest, opts = {}) {
       // Prix direct Cardmarket (code + numéro) : il remplace le prix TCGdex, qui peut venir d'une mauvaise fiche.
       Reco.loadDict().then(() => cardmarketDirect(card, setInfo, lang)).then((cmd) => {
         const price = cmd && (cmd.avg7 || cmd.avg30 || cmd.avg || cmd.trend);
-        if (!price) return;
+        if (!price || el.querySelector('.price-main')?.dataset.fixed) return; // un prix fixé passe avant
         let main = el.querySelector('.price-main');
         if (!main) {
           el.querySelector('.no-price')?.insertAdjacentHTML('afterend', '<p class="price-label"></p><p class="price-main"></p>');
