@@ -39,11 +39,9 @@ const Classeur = (() => {
   let data = loadBinder(current);
   const save = () => saveBinder(current, data);
 
-  // Prix principal d'une carte (même règle que la fenêtre de prix : tendance Cardmarket d'abord).
-  function mainPrice(card) {
-    const cm = card.pricing?.cardmarket;
-    return cm ? (cm.trend || cm.avg30 || cm.avg || cm['trend-holo'] || cm['avg-holo'] || null) : null;
-  }
+  // Prix d'une carte : prix moyen Cardmarket (même règle que la fenêtre de prix).
+  const PRICE_KIND = 'moyenne';
+  const mainPrice = (card) => averagePrice(card.pricing?.cardmarket);
 
   // ---------- Affichage ----------
   const isWide = () => window.matchMedia('(min-width: 760px)').matches;
@@ -129,7 +127,7 @@ const Classeur = (() => {
     target.slots[i] = {
       id: card.id, lang, name: card.name, localId: card.localId, image: card.image || null,
       setId, setName: card.set?.name || '', serieId: serieId || null,
-      price: mainPrice(card), priceAt: Date.now(),
+      price: mainPrice(card), priceAt: Date.now(), priceKind: PRICE_KIND,
     };
     target.spread = Math.floor(Math.floor(i / PER_PAGE) / pagesPerSpread());
     if (!saveBinder(binderId, target)) { toast("Impossible d'enregistrer sur cet appareil."); return false; }
@@ -227,7 +225,8 @@ const Classeur = (() => {
     if (refreshing) return;
     const binderId = current;
     data = loadBinder(binderId);
-    const todo = data.slots.map((c, i) => (c && (!onlyStale || Date.now() - (c.priceAt || 0) > STALE) ? i : -1)).filter((i) => i >= 0);
+    const stale = (c) => Date.now() - (c.priceAt || 0) > STALE || c.priceKind !== PRICE_KIND; // ancien mode de prix : à refaire
+    const todo = data.slots.map((c, i) => (c && (!onlyStale || stale(c)) ? i : -1)).filter((i) => i >= 0);
     if (!todo.length) { if (!onlyStale) setStatus('Aucune carte dans le classeur.'); return; }
     refreshing = true;
     ui.refresh.disabled = true;
@@ -242,7 +241,7 @@ const Classeur = (() => {
           // Mise à jour sur une copie fraîche : une carte ajoutée entre-temps n'est jamais effacée.
           const d = loadBinder(binderId);
           if (card && d.slots[i]?.id === c.id) {
-            Object.assign(d.slots[i], { price: mainPrice(card), priceAt: Date.now(), image: card.image || c.image });
+            Object.assign(d.slots[i], { price: mainPrice(card), priceAt: Date.now(), priceKind: PRICE_KIND, image: card.image || c.image });
             saveBinder(binderId, d);
           }
         } catch { failed++; }

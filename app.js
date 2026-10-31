@@ -917,13 +917,27 @@ function variantLabel(v) {
   if (v.size && v.size !== 'standard') parts.push(v.size === 'jumbo' ? 'Jumbo' : v.size);
   return parts.join(', ');
 }
+// Prix affiché d'une carte : le prix MOYEN de vente sur Cardmarket, d'abord sur 30 jours (le plus
+// représentatif), sinon moyenne générale, 7 jours, 1 jour, puis tendance. Jamais le prix le plus bas.
+// holo : lire d'abord les champs « -holo » (version reverse sur Cardmarket).
+const PRICE_ORDER = ['avg30', 'avg', 'avg7', 'avg1', 'trend'];
+function averagePrice(cm, holo = false) {
+  if (!cm) return null;
+  for (const k of PRICE_ORDER) {
+    const v = holo ? cm[`${k}-holo`] ?? cm[k] : cm[k] ?? cm[`${k}-holo`];
+    if (typeof v === 'number' && v > 0) return v;
+  }
+  return null;
+}
+
 // Sur Cardmarket, la version reverse d'une carte est dans les champs « -holo » du même produit.
 function variantPrice(v) {
   const cm = v.pricing?.cardmarket;
   if (!cm) return null;
-  const pick = (k) => (v.type === 'reverse' ? cm[`${k}-holo`] ?? cm[k] : cm[k] ?? cm[`${k}-holo`]);
-  const trend = pick('trend') || pick('avg30') || pick('avg');
-  return trend ? { trend, avg30: pick('avg30'), low: pick('low') } : null;
+  const holo = v.type === 'reverse';
+  const pick = (k) => (holo ? cm[`${k}-holo`] ?? cm[k] : cm[k] ?? cm[`${k}-holo`]);
+  const avg = averagePrice(cm, holo);
+  return avg ? { avg, avg7: pick('avg7') } : null;
 }
 
 // Fiche d'un set (bloc, code d'extension…) : la fiche d'une carte ne les donne pas.
@@ -943,7 +957,7 @@ function renderCard(card, isBest, opts = {}) {
   const { lang, showSet = false, serieId, addToBinder = false } = opts;
   const cm = card.pricing?.cardmarket;
   const hasHolo = cm && (cm['trend-holo'] || cm['avg-holo']);
-  const mainPrice = cm ? (cm.trend || cm.avg30 || cm.avg || cm['trend-holo'] || cm['avg-holo']) : null;
+  const mainPrice = averagePrice(cm);
   const cond = CONDITIONS[els.condition.value] || CONDITIONS.NM;
   const adj = (v) => (typeof v === 'number' ? v * cond.factor : v);
 
@@ -953,16 +967,16 @@ function renderCard(card, isBest, opts = {}) {
     : `<tr><th>${label}</th><td>${formatEur(adj(normal))}</td>${hasHolo ? `<td>${formatEur(adj(holo))}</td>` : ''}</tr>`;
 
   const prices = mainPrice ? `
-    <p class="price-label">Prix Cardmarket · état ${cond.label}</p>
+    <p class="price-label">Prix moyen Cardmarket · état ${cond.label}</p>
     <p class="price-main">${formatEur(adj(mainPrice))}</p>
     ${cond.factor < 1 ? `<p class="price-condition">Estimation (≈ ${Math.round(cond.factor * 100)} % du prix Near Mint de ${formatEur(mainPrice)})</p>` : ''}
     <table class="prices">
       ${hasHolo ? '<tr><th></th><td>Normale</td><td>Holo/Reverse</td></tr>' : ''}
-      ${row('Tendance', cm.trend, cm['trend-holo'])}
       ${row('Moyenne 30 j', cm.avg30, cm['avg30-holo'])}
+      ${row('Prix moyen de vente', cm.avg, cm['avg-holo'])}
       ${row('Moyenne 7 j', cm.avg7, cm['avg7-holo'])}
       ${row('Moyenne 1 j', cm.avg1, cm['avg1-holo'])}
-      ${row('Prix le plus bas', cm.low, cm['low-holo'])}
+      ${row('Tendance', cm.trend, cm['trend-holo'])}
     </table>
     ${cm.updated ? `<p class="price-label">Mis à jour le ${new Date(cm.updated).toLocaleDateString('fr-FR')}</p>` : ''}`
     : '<p class="no-price">Pas de prix Cardmarket disponible pour cette carte : vérifie directement sur Cardmarket.</p>';
@@ -971,8 +985,8 @@ function renderCard(card, isBest, opts = {}) {
   const versions = variants.length > 1 ? `
     <p class="price-label">Prix par version · état ${cond.label}</p>
     <table class="prices versions">
-      <tr><th>Version</th><td>Tendance</td><td>Le plus bas</td></tr>
-      ${variants.map((v) => `<tr><th>${escapeHtml(v.label)}</th><td>${formatEur(adj(v.price.trend))}</td><td>${formatEur(adj(v.price.low))}</td></tr>`).join('')}
+      <tr><th>Version</th><td>Prix moyen</td><td>Moyenne 7 j</td></tr>
+      ${variants.map((v) => `<tr><th>${escapeHtml(v.label)}</th><td>${formatEur(adj(v.price.avg))}</td><td>${formatEur(adj(v.price.avg7))}</td></tr>`).join('')}
     </table>` : '';
 
   const setTotal = card.set?.cardCount?.official;
