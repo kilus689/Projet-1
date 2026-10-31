@@ -444,3 +444,4 @@ details.others summary { cursor: pointer; color: var(--muted); font-weight: 600;
 }
 @media (prefers-color-scheme: dark) { .price-warning { background: #3a3014; color: #f3dc9a; border-color: #6b5718; } }
 table.prices.suspect { opacity: .6; }
+.price-main.doubtful { opacity: .55; text-decoration: line-through; text-decoration-thickness: 2px; }

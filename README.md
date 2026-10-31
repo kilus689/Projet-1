@@ -47,9 +47,10 @@ D'autres rubriques viendront s'ajouter au menu d'accueil.
        fréquente dont le total correspond à un vrai set l'emporte.
 3. **Identification** : la carte est recherchée dans l'API gratuite [TCGdex](https://tcgdex.dev).
    Le numéro, le nombre de cartes de l'extension et le code d'extension départagent les versions.
-4. **Prix** : le prix affiché est le **prix moyen** de vente Cardmarket sur 30 jours (sinon moyenne
-   générale, 7 j, 1 j, puis tendance) — jamais le prix le plus bas. Le détail montre les moyennes
-   30 j / générale / 7 j / 1 j et la tendance,
+4. **Prix** : le prix affiché est le **prix moyen 7 jours** de Cardmarket (sinon moyenne 30 j,
+   générale, 1 j, puis tendance) — jamais le prix le plus bas. Le détail montre les moyennes
+   7 j / 30 j / générale / 1 j et la tendance ; un avertissement signale deux cartes d'un même set
+   reliées à la même fiche Cardmarket (erreur de la base),
    ainsi qu'un **prix par version** quand une carte en a plusieurs (normale, reverse, holo,
    tampon 30ᵉ anniversaire…). Un bouton ouvre la recherche sur Cardmarket pour vérifier.
 

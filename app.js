@@ -917,10 +917,10 @@ function variantLabel(v) {
   if (v.size && v.size !== 'standard') parts.push(v.size === 'jumbo' ? 'Jumbo' : v.size);
   return parts.join(', ');
 }
-// Prix affiché d'une carte : le prix MOYEN de vente sur Cardmarket, d'abord sur 30 jours (le plus
-// représentatif), sinon moyenne générale, 7 jours, 1 jour, puis tendance. Jamais le prix le plus bas.
+// Prix affiché d'une carte : la MOYENNE 7 JOURS de Cardmarket (« Prix moyen 7 jours »), sinon
+// moyenne 30 jours, moyenne générale, 1 jour, puis tendance. Jamais le prix le plus bas.
 // holo : lire d'abord les champs « -holo » (version reverse sur Cardmarket).
-const PRICE_ORDER = ['avg30', 'avg', 'avg7', 'avg1', 'trend'];
+const PRICE_ORDER = ['avg7', 'avg30', 'avg', 'avg1', 'trend']; // la moyenne 7 jours d'abord
 function averagePrice(cm, holo = false) {
   if (!cm) return null;
   for (const k of PRICE_ORDER) {
@@ -961,7 +961,7 @@ function variantPrice(v) {
   const holo = v.type === 'reverse';
   const pick = (k) => (holo ? cm[`${k}-holo`] ?? cm[k] : cm[k] ?? cm[`${k}-holo`]);
   const avg = averagePrice(cm, holo);
-  return avg ? { avg, avg7: pick('avg7') } : null;
+  return avg ? { avg, avg30: pick('avg30') } : null;
 }
 
 // Fiche d'un set (bloc, code d'extension…) : la fiche d'une carte ne les donne pas.
@@ -996,16 +996,16 @@ function renderCard(card, isBest, opts = {}) {
       d'une <strong>autre version</strong> de cette carte : il ne correspond pas du tout au prix TCGplayer
       (${formatUsd(best.usd)}). L'app affiche donc l'estimation TCGplayer. Vérifie sur Cardmarket.</p>` : '';
   const prices = mainPrice ? `
-    <p class="price-label">${best.source === 'tcgplayer' ? 'Estimation d\'après TCGplayer (≈ ' + formatUsd(best.usd) + ')' : 'Prix moyen Cardmarket'} · état ${cond.label}</p>
+    <p class="price-label">${best.source === 'tcgplayer' ? 'Estimation d\'après TCGplayer (≈ ' + formatUsd(best.usd) + ')' : 'Prix moyen 7 jours Cardmarket'} · état ${cond.label}</p>
     <p class="price-main">${formatEur(adj(mainPrice))}</p>
     ${cond.factor < 1 ? `<p class="price-condition">Estimation (≈ ${Math.round(cond.factor * 100)} % du prix Near Mint de ${formatEur(mainPrice)})</p>` : ''}
     ${warning}
     ${best.suspicious ? '<p class="price-label">Détail Cardmarket (sans doute une autre version) :</p>' : ''}
     ${!cm ? '<p class="price-label">Pas de prix Cardmarket pour cette carte.</p>' : `<table class="prices${best.suspicious ? ' suspect' : ''}">
       ${hasHolo ? '<tr><th></th><td>Normale</td><td>Holo/Reverse</td></tr>' : ''}
+      ${row('Moyenne 7 j', cm.avg7, cm['avg7-holo'])}
       ${row('Moyenne 30 j', cm.avg30, cm['avg30-holo'])}
       ${row('Prix moyen de vente', cm.avg, cm['avg-holo'])}
-      ${row('Moyenne 7 j', cm.avg7, cm['avg7-holo'])}
       ${row('Moyenne 1 j', cm.avg1, cm['avg1-holo'])}
       ${row('Tendance', cm.trend, cm['trend-holo'])}
     </table>
@@ -1016,8 +1016,8 @@ function renderCard(card, isBest, opts = {}) {
   const versions = variants.length > 1 ? `
     <p class="price-label">Prix par version · état ${cond.label}</p>
     <table class="prices versions">
-      <tr><th>Version</th><td>Prix moyen</td><td>Moyenne 7 j</td></tr>
-      ${variants.map((v) => `<tr><th>${escapeHtml(v.label)}</th><td>${formatEur(adj(v.price.avg))}</td><td>${formatEur(adj(v.price.avg7))}</td></tr>`).join('')}
+      <tr><th>Version</th><td>Moyenne 7 j</td><td>Moyenne 30 j</td></tr>
+      ${variants.map((v) => `<tr><th>${escapeHtml(v.label)}</th><td>${formatEur(adj(v.price.avg))}</td><td>${formatEur(adj(v.price.avg30))}</td></tr>`).join('')}
     </table>` : '';
 
   const setTotal = card.set?.cardCount?.official;
@@ -1045,6 +1045,26 @@ function renderCard(card, isBest, opts = {}) {
     const btn = e.currentTarget;
     Classeur.chooseAndAdd(card, lang, serieId, (title) => { btn.textContent = `✓ Dans ${title}`; });
   });
+  // Erreur de la base : une autre carte du même set utilise la même fiche Cardmarket
+  // (ex : Lugia EX 94/98 et 68/98) → le prix est peut-être celui de l'autre carte.
+  const idProduct = card.pricing?.cardmarket?.idProduct;
+  if (lang && card.set?.id && idProduct) {
+    getJson(`${API}/${lang}/cards?name=${encodeURIComponent(card.name)}`).then(async (list) => {
+      const twins = (list || []).filter((c) => c.id !== card.id && c.id.startsWith(card.set.id + '-')).slice(0, 4);
+      for (const t of twins) {
+        const other = await getJson(`${API}/${lang}/cards/${encodeURIComponent(t.id)}`).catch(() => null);
+        if (other?.pricing?.cardmarket?.idProduct !== idProduct) continue;
+        const box = document.createElement('p');
+        box.className = 'price-warning';
+        box.innerHTML = `⚠️ Erreur de la base de cartes : cette carte (n° ${escapeHtml(card.localId)}) et la n° ${escapeHtml(other.localId)}
+          sont reliées à la <strong>même fiche Cardmarket</strong>. Le prix affiché est donc peut-être celui de l'autre carte.
+          Vérifie le vrai prix avec « Voir sur Cardmarket ».`;
+        el.querySelector('.price-main')?.after(box);
+        el.querySelector('.price-main')?.classList.add('doubtful');
+        break;
+      }
+    }).catch(() => {});
+  }
   const blocEl = el.querySelector('.bloc-name');
   if (lang && card.set?.id) {
     getSetInfo(lang, card.set.id).then((setInfo) => {

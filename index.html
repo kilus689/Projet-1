@@ -10,7 +10,7 @@
     // Mise à jour automatique : si GitHub a une version plus récente que cette page (gardée en
     // mémoire par Safari ou par l'icône de l'écran d'accueil), on recharge la page à jour.
     (function () {
-      var APP_VERSION = 44;
+      var APP_VERSION = 45;
       fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (v) {
@@ -27,13 +27,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="img/icon-180.png" type="image/png">
   <link rel="apple-touch-icon" href="img/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=44">
+  <link rel="stylesheet" href="style.css?v=45">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
-  <script src="reco.js?v=44" defer></script>
-  <script src="sets.js?v=44" defer></script>
-  <script src="recherche.js?v=44" defer></script>
-  <script src="classeur.js?v=44" defer></script>
-  <script src="app.js?v=44" defer></script>
+  <script src="reco.js?v=45" defer></script>
+  <script src="sets.js?v=45" defer></script>
+  <script src="recherche.js?v=45" defer></script>
+  <script src="classeur.js?v=45" defer></script>
+  <script src="app.js?v=45" defer></script>
 </head>
 <body>
   <!-- Accueil -->

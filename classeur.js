@@ -40,7 +40,7 @@ const Classeur = (() => {
   const save = () => saveBinder(current, data);
 
   // Prix d'une carte : prix moyen Cardmarket, ou estimation TCGplayer s'il semble erroné (bestPrice).
-  const PRICE_KIND = 'moyenne+controle';
+  const PRICE_KIND = 'moyenne7j'; // changer cette valeur fait recalculer les prix déjà rangés
   const mainPrice = (card) => bestPrice(card).value;
 
   // ---------- Affichage ----------
