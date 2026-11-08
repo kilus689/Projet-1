@@ -134,15 +134,23 @@
       });
       this.raceRef = race;
       this.camInit = false;
+      this.camInitH = false;
       // Compile les shaders d'avance pour éviter un à-coup au départ
       try { this.renderer.compile(this.scene, this.camera); } catch (e) { /* facultatif */ }
     }
 
     draw(race, focus, mode, dt, opts) {
       this.syncCars(race);
+      const tr = race.track, N = tr.n;
+      const hAt = (i) => tr.h[((i % N) + N) % N] * 10;
       for (const [c, m] of this.cars) {
-        m.g.position.set(c.x, 0, c.y);
+        const p = tr.pts[c.idx];
+        // Hauteur et tangage selon la pente de la piste
+        const along = (c.x - p.x) * p.tx + (c.y - p.y) * p.ty;
+        m.g.position.set(c.x, hAt(c.idx) + along * tr.slope[c.idx] * 0.1, c.y);
         m.g.rotation.y = -c.a;
+        m.g.rotation.x = 0;
+        const pitch = Math.atan(tr.slope[c.idx] * Math.cos(c.a - p.ang));
         const fwd = c.vx * Math.cos(c.a) + c.vy * Math.sin(c.a);
         m.spin -= fwd * dt;
         for (const w of m.wheels) {
@@ -151,7 +159,7 @@
         }
         m.helmet.visible = !(c === focus && mode === 'cockpit');
         // Légère prise de roulis/tangage avec les forces
-        m.g.rotation.z = Math.max(-0.02, Math.min(0.02, (c.brakeIn > 0.5 ? 0.012 : c.throttle > 0 ? -0.006 : 0)));
+        m.g.rotation.z = pitch + Math.max(-0.02, Math.min(0.02, (c.brakeIn > 0.5 ? 0.012 : c.throttle > 0 ? -0.006 : 0)));
       }
 
       // Feux du portique de départ
@@ -162,20 +170,26 @@
       const cam = this.camera;
       const a = focus.a, fx = Math.cos(a), fz = Math.sin(a);
       const sp = Math.min(1, focus.speed / F1.PHYS.maxSpeed);
+      const hF = this.cars.get(focus) ? this.cars.get(focus).g.position.y : 0;
+      if (this.camH == null || !this.camInitH) { this.camH = hF; this.camInitH = true; }
+      this.camH += (hF - this.camH) * Math.min(1, dt * 6);
       const shake = sp > 0.6 ? (Math.random() - 0.5) * 0.12 * sp : 0;
       if (mode === 'chase') {
         if (!this.camInit) { this.yaw = a; this.camInit = true; }
         this.yaw += F1.util.wrapAngle(a - this.yaw) * Math.min(1, dt * 4.5);
         const cx = Math.cos(this.yaw), cz = Math.sin(this.yaw);
         const dist = 70 + sp * 12;
-        cam.position.set(focus.x - cx * dist, 21, focus.y - cz * dist);
-        cam.lookAt(focus.x + cx * 60, 6, focus.y + cz * 60);
+        const back = hAt(focus.idx - Math.round(dist / 10));
+        cam.position.set(focus.x - cx * dist, 21 + Math.max(back, this.camH - 30), focus.y - cz * dist);
+        cam.lookAt(focus.x + cx * 60, 6 + hAt(focus.idx + 6), focus.y + cz * 60);
         cam.fov = 58 + sp * 10;
       } else {
         this.camInit = false;
         const eye = mode === 'cockpit' ? { b: -1.2, h: 8.1, look: 5.5 } : { b: -5, h: 12.8, look: 4 };
-        cam.position.set(focus.x + fx * eye.b, eye.h + shake, focus.y + fz * eye.b);
-        cam.lookAt(focus.x + fx * 300, eye.look, focus.y + fz * 300);
+        cam.position.set(focus.x + fx * eye.b, eye.h + shake + hF, focus.y + fz * eye.b);
+        // Le regard suit la pente de la route devant la voiture
+        const pitch = Math.atan(tr.slope[focus.idx] * Math.cos(focus.a - tr.pts[focus.idx].ang));
+        cam.lookAt(focus.x + fx * 300, eye.look + hF + Math.tan(pitch) * 300, focus.y + fz * 300);
         cam.fov = (mode === 'cockpit' ? 70 : 64) + sp * 8;
       }
       cam.updateProjectionMatrix();
@@ -183,8 +197,8 @@
 
       // L'ombre du soleil suit la voiture suivie
       const sun = this.world.sun;
-      sun.target.position.set(focus.x, 0, focus.y);
-      sun.position.set(focus.x + 900, 1600, focus.y + 500);
+      sun.target.position.set(focus.x, hF, focus.y);
+      sun.position.set(focus.x + 900, hF + 1600, focus.y + 500);
 
       // Volant (cockpit)
       this.wheel.visible = mode === 'cockpit';

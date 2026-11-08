@@ -24,7 +24,7 @@
     { id: 'it-1922', gp: 'Grand Prix d\'Italie', place: 'Monza', circuit: 'Autodromo Nazionale Monza', flag: '🇮🇹', laps: 53, env: 'park', width: 130 },
     { id: 'es-2026', gp: 'Grand Prix d\'Espagne', place: 'Madrid', circuit: 'Madring', flag: '🇪🇸', laps: 57, env: 'street', width: 125 },
     { id: 'az-2016', gp: 'Grand Prix d\'Azerbaïdjan', place: 'Bakou', circuit: 'Baku City Circuit', flag: '🇦🇿', laps: 51, env: 'street', width: 120 },
-    { id: 'sg-2008', gp: 'Grand Prix de Singapour', place: 'Singapour', circuit: 'Marina Bay', flag: '🇸🇬', laps: 62, env: 'street', width: 120 },
+    { id: 'sg-2008', gp: 'Grand Prix de Singapour', place: 'Singapour', circuit: 'Marina Bay', flag: '🇸🇬', laps: 62, env: 'street', width: 120, relief: 0.15 }, // relief réduit : altitude faussée par les immeubles dans les données
     { id: 'us-2012', gp: 'Grand Prix des États-Unis', place: 'Austin', circuit: 'Circuit of the Americas', flag: '🇺🇸', laps: 56, env: 'circuit', width: 140 },
     { id: 'mx-1962', gp: 'Grand Prix de Mexico', place: 'Mexico', circuit: 'Autódromo Hermanos Rodríguez', flag: '🇲🇽', laps: 71, env: 'park', width: 130 },
     { id: 'br-1940', gp: 'Grand Prix de São Paulo', place: 'São Paulo', circuit: 'Interlagos', flag: '🇧🇷', laps: 71, env: 'park', width: 130 },

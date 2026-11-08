@@ -24,7 +24,7 @@
       const p = pts[ii];
       for (let j = 0; j < L; j++) {
         const o = offs[j];
-        pos.push(p.x + p.nx * o, Array.isArray(ys) ? ys[j] : ys, p.y + p.ny * o);
+        pos.push(p.x + p.nx * o, (Array.isArray(ys) ? ys[j] : ys) + (track.h ? track.h[ii] * 10 : 0), p.y + p.ny * o);
         uv.push(j / (L - 1), (i * sp) / vScale);
         if (col) { const c = colorFn(ii, o); col.push(c, c, c); }
       }
@@ -74,7 +74,8 @@
       const ii = i % N;
       const p = pts[ii];
       const x = p.x + p.nx * off, z = p.y + p.ny * off;
-      pos.push(x, y0, z, x, y1, z);
+      const hh = track.h ? track.h[ii] * 10 : 0;
+      pos.push(x, y0 + hh, z, x, y1 + hh, z);
       // Côté droit : texture inversée pour que les textes se lisent depuis la piste
       const u = ((off > 0 ? -1 : 1) * i * sp) / vScale;
       uv.push(u, 0, u, 1);
@@ -110,6 +111,35 @@
     return im;
   }
 
+  // Hauteur du sol (unités) : collée à la piste près du tracé, terrain réel plus loin
+  function groundFn(track) {
+    const pts = track.pts, half = track.half, run = track.runoff;
+    return (x, z) => {
+      const cx = Math.floor(x / track.cell), cy = Math.floor(z / track.cell);
+      let bd = Infinity;
+      const cand = [];
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        const arr = track.grid.get(track.cellKey(cx + a, cy + b));
+        if (!arr) continue;
+        for (const j of arr) {
+          const d = (pts[j].x - x) ** 2 + (pts[j].y - z) ** 2;
+          if (d < bd) bd = d;
+          if (d < 360000) cand.push(j, d);
+        }
+      }
+      const dem = track.groundAt(x, z) * 10;
+      if (bd === Infinity) return dem;
+      const d = Math.sqrt(bd);
+      let hMin = Infinity;
+      const lim = (d + 60) ** 2;
+      for (let k = 0; k < cand.length; k += 2) if (cand[k + 1] <= lim) hMin = Math.min(hMin, track.h[cand[k]] * 10);
+      if (hMin === Infinity) return dem;
+      let t = (d - (half + run + 30)) / 420;
+      t = t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+      return (hMin - 2) * (1 - t) + dem * t;
+    };
+  }
+
   // ---------- Construction ----------
   X.buildWorld = function (track, scene2d, quality) {
     const s = new T.Scene();
@@ -119,6 +149,9 @@
     const tx = X.tex;
     const add = (geo, mat, recv, cast) => { const m = new T.Mesh(geo, mat); m.receiveShadow = recv !== false; if (cast) m.castShadow = true; s.add(m); return m; };
     const info = { night, gantryLights: [] };
+    const H = (i) => (track.h ? track.h[((i % N) + N) % N] * 10 : 0);
+    const groundY = groundFn(track);
+    info.groundY = groundY;
 
     // Ciel, brouillard, reflets
     const sky = X.skyTexture(night, id.length * 7);
@@ -153,9 +186,33 @@
     const gtex = (env === 'park' || env === 'circuit') ? tx.grass([groundBase]).clone() : tx.ground(groundBase).clone();
     gtex.needsUpdate = true;
     gtex.repeat.set(gw / 260, gh / 260);
-    const ground = add(new T.PlaneGeometry(gw, gh), std({ map: gtex, side: T.FrontSide }));
+    let minG = 0;
+    if (track.dem) {
+      const E = track.dem, step = quality === 'low' ? 320 : 200;
+      const x0 = E.ox, z0 = E.oy, x1 = E.ox + (E.nx - 1) * E.sp, z1 = E.oy + (E.ny - 1) * E.sp;
+      const nx = Math.ceil((x1 - x0) / step), nz = Math.ceil((z1 - z0) / step);
+      const pos = [], uv = [], idx = [];
+      minG = Infinity;
+      for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+        const x = x0 + i * step, z = z0 + j * step;
+        const y = groundY(x, z);
+        minG = Math.min(minG, y);
+        pos.push(x, y, z);
+        uv.push(x / 260, z / 260);
+        if (i < nx && j < nz) { const a = j * (nx + 1) + i; idx.push(a, a + nx + 1, a + 1, a + 1, a + nx + 1, a + nx + 2); }
+      }
+      const gg = new T.BufferGeometry();
+      gg.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+      gg.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+      gg.setIndex(idx);
+      gg.computeVertexNormals();
+      const gt2 = gtex.clone(); gt2.needsUpdate = true; gt2.repeat.set(1, 1);
+      add(gg, std({ map: gt2, side: T.FrontSide }));
+    }
+    const ground = add(new T.PlaneGeometry(gw * 2, gh * 2), std({ map: gtex, side: T.FrontSide }));
+    gtex.repeat.set(gw * 2 / 260, gh * 2 / 260);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set((b.minX + b.maxX) / 2, -0.3, (b.minY + b.maxY) / 2);
+    ground.position.set((b.minX + b.maxX) / 2, track.dem ? minG - 40 : -0.3, (b.minY + b.maxY) / 2);
 
     // Virages : indices et côté extérieur
     const TH = 0.0022;
@@ -233,13 +290,13 @@
     const ck = tx.checker().clone(); ck.needsUpdate = true; ck.repeat.set(half / 16, 0.4);
     const startLine = add(new T.PlaneGeometry(12, half * 2), std({ map: ck, side: T.FrontSide }));
     startLine.rotation.set(-Math.PI / 2, 0, -p0.ang);
-    startLine.position.set(p0.x, 0.6, p0.y);
+    startLine.position.set(p0.x, 0.6 + H(0), p0.y);
     const gridGeo = [];
     for (let gIdx = 0; gIdx < 24; gIdx++) {
       const pos = track.posAt(-70 - gIdx * 80 + 30, gIdx % 2 === 0 ? -half * 0.4 : half * 0.4);
       const bar = new T.BoxGeometry(1.5, 0.1, 20);
       bar.rotateY(-pos.a);
-      bar.translate(pos.x, 0.62, pos.y);
+      bar.translate(pos.x, 0.62 + H(pos.idx), pos.y);
       gridGeo.push(bar);
     }
     add(G.merge(gridGeo), white);
@@ -296,7 +353,7 @@
       }
     }
     const postMat = std({ color: 0x8b9096, metalness: 0.7, roughness: 0.4 });
-    const pl = (d, P, S) => { const p = track.pts[d.i]; P.set(p.x + p.nx * d.off, 0, p.y + p.ny * d.off); };
+    const pl = (d, P, S) => { const p = track.pts[d.i]; P.set(p.x + p.nx * d.off, H(d.i), p.y + p.ny * d.off); };
     instanced(s, new T.BoxGeometry(0.6, 7, 0.6).translate(0, 3.5, 0), postMat, posts, (d, P, S) => { pl(d, P, S); S.set(1, 1, 1); });
     instanced(s, new T.CylinderGeometry(0.35, 0.35, 40, 5).translate(0, 20, 0), postMat, fencePosts, (d, P, S) => { pl(d, P, S); S.set(1, 1, 1); });
 
@@ -375,7 +432,7 @@
           gantry.add(lamp);
         }
       }
-      gantry.position.set(p0.x + p0.tx * 8, 0, p0.y + p0.ty * 8);
+      gantry.position.set(p0.x + p0.tx * 8, H(0), p0.y + p0.ty * 8);
       gantry.rotation.y = -p0.ang;
       s.add(gantry);
     }
@@ -396,7 +453,7 @@
         const post = new T.Mesh(new T.BoxGeometry(0.6, 8, 0.6), postMat);
         post.position.y = 4;
         grp.add(panel, post);
-        grp.position.set(p.x + p.nx * off, 0, p.y + p.ny * off);
+        grp.position.set(p.x + p.nx * off, H(i), p.y + p.ny * off);
         grp.rotation.y = Math.atan2(-p.tx, -p.ty);
         s.add(grp);
       });
@@ -448,32 +505,38 @@
               if (tropical && u < 0.45) palms.push(d);
               else if (!tropical && u < 0.35) conifers.push(d);
               else trees.push(d);
-            } else if (d.t === 'palm') palms.push(d);
+            } else if (d.t === 'palm') {
+              // Pas de palmiers sous un climat tempéré : sapins et feuillus à la place
+              if (tropical || env === 'desert') palms.push(d);
+              else (rnd() < 0.5 ? conifers : trees).push(d);
+            }
             else if (d.t === 'rock') rocks.push(d);
             else if (d.t === 'b') builds.push(d);
           }
         }
       }
-      if (quality === 'low') { trees.length = Math.min(trees.length, 600); conifers.length = Math.min(conifers.length, 300); }
+      const cap = quality === 'low' ? 600 : quality === 'medium' ? 2500 : 6000;
+      for (const arr of [trees, conifers, palms]) if (arr.length > cap) arr.length = cap;
       const leaf = std({ color: 0xffffff, roughness: 0.95, flatShading: true });
       const bark = std({ color: 0x5a4128 });
       // Feuillus : 3 masses de feuillage
       const crown = G.merge([
-        G.at(new T.IcosahedronGeometry(1, 1), 0, 2.1, 0, 0, 0, 0, [1.05, 0.9, 1.05]),
-        G.at(new T.IcosahedronGeometry(0.75, 1), 0.55, 2.7, 0.3),
-        G.at(new T.IcosahedronGeometry(0.7, 1), -0.5, 2.55, -0.35),
+        G.at(new T.IcosahedronGeometry(1, 0), 0, 2.1, 0, 0, 0, 0, [1.05, 0.9, 1.05]),
+        G.at(new T.IcosahedronGeometry(0.75, 0), 0.55, 2.7, 0.3),
+        G.at(new T.IcosahedronGeometry(0.7, 0), -0.5, 2.55, -0.35),
       ]);
       const trunk = new T.CylinderGeometry(0.1, 0.16, 2, 6).translate(0, 1, 0);
       const vary = (d, col, base, spread) => { const v = (Math.sin(d.x * 0.013 + d.y * 0.007) + 1) / 2; col.setHSL(base[0] + (v - 0.5) * spread, base[1], base[2] + (v - 0.5) * 0.1); return true; };
-      instanced(s, crown, leaf, trees, (d, P, S, E, col) => { P.set(d.x, 0, d.y); S.setScalar(d.r * 1.1); E.y = d.rot; return vary(d, col, [0.28, 0.45, 0.28], 0.06); }, { cast: true });
-      instanced(s, trunk, bark, trees.concat(conifers), (d, P, S) => { P.set(d.x, 0, d.y); S.set(d.r * 1.1, d.r * 1.1, d.r * 1.1); }, { cast: true });
+      for (const d of trees.concat(conifers, palms, rocks)) d.gy = groundY(d.x, d.y);
+      instanced(s, crown, leaf, trees, (d, P, S, E, col) => { P.set(d.x, d.gy, d.y); S.setScalar(d.r * 1.1); E.y = d.rot; return vary(d, col, [0.28, 0.45, 0.28], 0.06); }, { cast: true });
+      instanced(s, trunk, bark, trees.concat(conifers), (d, P, S) => { P.set(d.x, d.gy, d.y); S.set(d.r * 1.1, d.r * 1.1, d.r * 1.1); }, { cast: true });
       // Conifères : cônes empilés
       const cone = G.merge([
-        G.at(new T.ConeGeometry(0.9, 1.6, 8), 0, 1.6, 0),
-        G.at(new T.ConeGeometry(0.72, 1.4, 8), 0, 2.4, 0),
-        G.at(new T.ConeGeometry(0.5, 1.2, 8), 0, 3.1, 0),
+        G.at(new T.ConeGeometry(0.9, 1.6, 6), 0, 1.6, 0),
+        G.at(new T.ConeGeometry(0.72, 1.4, 6), 0, 2.4, 0),
+        G.at(new T.ConeGeometry(0.5, 1.2, 6), 0, 3.1, 0),
       ]);
-      instanced(s, cone, leaf, conifers, (d, P, S, E, col) => { P.set(d.x, 0, d.y); S.setScalar(d.r * 1.3); E.y = d.rot; return vary(d, col, [0.33, 0.4, 0.2], 0.04); }, { cast: true });
+      instanced(s, cone, leaf, conifers, (d, P, S, E, col) => { P.set(d.x, d.gy, d.y); S.setScalar(d.r * 1.3); E.y = d.rot; return vary(d, col, [0.33, 0.4, 0.2], 0.04); }, { cast: true });
       // Palmiers : tronc + palmes retombantes
       const fronds = [];
       for (let k = 0; k < 8; k++) {
@@ -486,16 +549,37 @@
       }
       const palmTop = G.merge(fronds);
       const palmTrunk = new T.CylinderGeometry(0.09, 0.14, 3.4, 6).translate(0, 1.7, 0);
-      instanced(s, palmTrunk, std({ color: 0x8a6a45 }), palms, (d, P, S) => { P.set(d.x, 0, d.y); S.setScalar(d.r * 1.3); }, { cast: true });
-      instanced(s, palmTop, leaf, palms, (d, P, S, E, col) => { P.set(d.x, 0, d.y); S.setScalar(d.r * 1.3); E.y = d.rot; return vary(d, col, [0.3, 0.5, 0.3], 0.05); }, { cast: true });
-      instanced(s, new T.DodecahedronGeometry(1, 0), std({ color: 0xa88a62, flatShading: true }), rocks, (d, P, S, E) => { P.set(d.x, d.r * 0.3, d.y); S.set(d.r, d.r * 0.6, d.r); E.y = d.r; });
+      instanced(s, palmTrunk, std({ color: 0x8a6a45 }), palms, (d, P, S) => { P.set(d.x, d.gy, d.y); S.setScalar(d.r * 1.3); }, { cast: true });
+      instanced(s, palmTop, leaf, palms, (d, P, S, E, col) => { P.set(d.x, d.gy, d.y); S.setScalar(d.r * 1.3); E.y = d.rot; return vary(d, col, [0.3, 0.5, 0.3], 0.05); }, { cast: true });
+      instanced(s, new T.DodecahedronGeometry(1, 0), std({ color: 0xa88a62, flatShading: true }), rocks, (d, P, S, E) => { P.set(d.x, d.gy + d.r * 0.3, d.y); S.set(d.r, d.r * 0.6, d.r); E.y = d.r; });
       // Immeubles
       const bm = instanced(s, new T.BoxGeometry(1, 1, 1), std({ map: tx.facade(night), roughness: 0.7, emissive: night ? 0x221a10 : 0x000000 }), builds, (d, P, S, E, col) => {
         const hgt = 60 + d.h2 * 9;
-        P.set(d.x + d.w / 2, hgt / 2, d.y + d.h / 2); S.set(d.w, hgt, d.h);
+        const gy = Math.min(groundY(d.x, d.y), groundY(d.x + d.w, d.y + d.h), groundY(d.x + d.w / 2, d.y + d.h / 2));
+        P.set(d.x + d.w / 2, gy + hgt / 2 - 10, d.y + d.h / 2); S.set(d.w, hgt + 20, d.h);
         col.set(d.c);
         return true;
       }, { cast: true });
+    }
+
+    if (track.bridges && track.bridges.length) {
+      const concrete = std({ color: 0xb9b6ae, roughness: 0.85 });
+      for (const br of track.bridges) {
+        const i0 = br.j - 34, i1 = br.j + 34;
+        add(ribbon(track, [-(half + 16), half + 16], -9, 400, i0, i1), concrete, true, true);
+        const keep = (i) => { let d = i - (((i0 % N) + N) % N); d = ((d % N) + N) % N; return d <= i1 - i0; };
+        for (const sd of [1, -1]) add(wall(track, sd * (half + 16), -9, 9, 200, keep), concrete, true, true);
+        for (const dj of [-26, 26]) {
+          const p = track.pts[((br.j + dj) % N + N) % N];
+          const top = H(br.j + dj) - 9, bot = groundY(p.x, p.y) - 5;
+          if (top - bot < 5) continue;
+          const pier = new T.Mesh(new T.BoxGeometry(14, top - bot, half * 1.6), concrete);
+          pier.position.set(p.x, (top + bot) / 2, p.y);
+          pier.rotation.y = -p.ang;
+          pier.castShadow = true;
+          s.add(pier);
+        }
+      }
     }
 
     info.scene = s;
