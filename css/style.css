@@ -462,3 +462,21 @@ kbd {
 .touch-mode .hud-bottom { bottom: max(190px, calc(env(safe-area-inset-bottom) + 180px)); }
 .touch-mode .hud-buttons { bottom: auto; top: 300px; right: 12px; left: auto; transform: none; flex-direction: column; }
 @media (max-width: 760px) { .touch-mode .hud-buttons { top: 200px; } }
+
+/* Commandes tactiles encore plus grandes */
+#touch .touch-left, #touch .touch-right { gap: 22px; bottom: max(28px, calc(env(safe-area-inset-bottom) + 18px)); }
+#touch .touch-left { left: 20px; }
+#touch .touch-right { right: 20px; }
+#touch button { width: 160px; height: 160px; font-size: 56px; border-width: 3px; }
+#touch button.brake { width: 170px; height: 170px; font-size: 26px; }
+#touch button.gas { width: 170px; height: 210px; font-size: 26px; border-radius: 85px; }
+#touch button.small { width: 92px; height: 92px; font-size: 18px; }
+#touch button.boost-btn { font-size: 34px; }
+@media (max-height: 700px) {
+  #touch button { width: 120px; height: 120px; font-size: 42px; }
+  #touch button.brake { width: 128px; height: 128px; font-size: 21px; }
+  #touch button.gas { width: 128px; height: 160px; font-size: 21px; }
+  #touch button.small { width: 72px; height: 72px; font-size: 15px; }
+}
+.touch-mode .hud-bottom { bottom: max(250px, calc(env(safe-area-inset-bottom) + 240px)); }
+@media (max-height: 700px) { .touch-mode .hud-bottom { bottom: 190px; } }
