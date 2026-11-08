@@ -445,3 +445,20 @@ kbd {
 .liv-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; background: rgba(255,255,255,0.04); border-left: 5px solid var(--team); flex-wrap: wrap; }
 .liv-name { font-weight: 800; font-size: 17px; min-width: 150px; }
 .liv-state { flex: 1; color: var(--muted); font-size: 15px; }
+
+/* Commandes tactiles agrandies */
+#touch .touch-left, #touch .touch-right { gap: 18px; bottom: max(40px, calc(env(safe-area-inset-bottom) + 30px)); }
+#touch .touch-left { left: 18px; }
+#touch .touch-right { right: 18px; }
+#touch button { width: 116px; height: 116px; font-size: 40px; }
+#touch button.gas, #touch button.brake { width: 128px; height: 128px; font-size: 20px; }
+#touch button.gas { height: 150px; }
+#touch button.small { width: 72px; height: 72px; font-size: 15px; }
+@media (max-height: 500px) {
+  #touch button { width: 92px; height: 92px; font-size: 32px; }
+  #touch button.gas, #touch button.brake { width: 100px; height: 100px; font-size: 17px; }
+  #touch button.small { width: 60px; height: 60px; }
+}
+.touch-mode .hud-bottom { bottom: max(190px, calc(env(safe-area-inset-bottom) + 180px)); }
+.touch-mode .hud-buttons { bottom: auto; top: 300px; right: 12px; left: auto; transform: none; flex-direction: column; }
+@media (max-width: 760px) { .touch-mode .hud-buttons { top: 200px; } }
