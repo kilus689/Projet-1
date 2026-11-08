@@ -239,7 +239,37 @@
   }
 
   function settingsScreen(back) {
-    show(card('Aides et commandes', backBtn(back), ...settingsPanel(() => settingsScreen(back), {})));
+    show(card('Aides et commandes', backBtn(back), ...settingsPanel(() => settingsScreen(back), {}), liveryPanel(() => settingsScreen(back))));
+  }
+
+  // Livrées personnalisées : images du joueur, gardées uniquement sur cet appareil
+  function liveryPanel(rerender) {
+    const L = F1.Liveries;
+    if (!L) return null;
+    const rows = F1.TEAMS2026.map((t) => {
+      const input = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', style: 'display:none', onchange: async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        try { await L.set(t.id, f); } catch (err) { alert('Image illisible.'); }
+        rerender();
+      } });
+      return h('div', { class: 'liv-row', style: `--team:${t.color}` },
+        h('span', { class: 'liv-name' }, t.name),
+        h('span', { class: 'liv-state' }, L.has(t.id) ? '✔ Livrée importée' : 'Livrée du jeu'),
+        h('button', { class: 'small-btn', onclick: () => input.click() }, 'Importer'),
+        L.has(t.id) ? h('button', { class: 'small-btn danger', onclick: async () => { await L.remove(t.id); rerender(); } }, 'Retirer') : null,
+        input);
+    });
+    return h('section', null,
+      h('h3', null, 'Livrées personnalisées'),
+      h('p', { class: 'hint' }, "Importez une image par écurie (PNG ou JPEG, idéalement 4096 × 3072). Elle doit suivre le gabarit du modèle du jeu : une peau faite pour un autre jeu ne tombera pas aux bons endroits. Les images restent sur cet appareil et ne sont jamais publiées. Les ailerons gardent la couleur secondaire de l'écurie."),
+      h('button', { onclick: () => {
+        const a = document.createElement('a');
+        a.href = L.template().toDataURL('image/png');
+        a.download = 'gabarit-livree-paddock2026.png';
+        document.body.appendChild(a); a.click(); a.remove();
+      } }, '⬇ Télécharger le gabarit 4K'),
+      h('div', { class: 'liv-list' }, rows));
   }
 
   function quickCareer() {

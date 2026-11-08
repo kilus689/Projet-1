@@ -7,8 +7,9 @@
   const T = window.THREE;
   const X = F1.X3D;
 
-  const QUALITY = ['low', 'medium', 'high'];
-  const QLABEL = { low: 'Basse', medium: 'Moyenne', high: 'Élevée' };
+  const QUALITY = ['low', 'medium', 'high', 'ultra'];
+  const QLABEL = { low: 'Basse', medium: 'Moyenne', high: 'Élevée', ultra: 'Maximale (4K)' };
+  const TEXRES = { low: 1024, medium: 1024, high: 2048, ultra: 4096 };
 
   function makeSteeringWheel() {
     const g = new T.Group();
@@ -62,7 +63,9 @@
     applyQuality() {
       const r = this.renderer;
       const dpr = window.devicePixelRatio || 1;
-      r.setPixelRatio(Math.min(dpr, this.quality === 'high' ? 2 : this.quality === 'medium' ? 1.5 : 1));
+      // Maximale : pleine définition de l'écran (Retina), textures 4096 px, ombres 4096 px
+      r.setPixelRatio(Math.min(dpr, this.quality === 'ultra' ? 3 : this.quality === 'high' ? 2 : this.quality === 'medium' ? 1.5 : 1));
+      if (X.texRes !== TEXRES[this.quality]) { X.texRes = TEXRES[this.quality]; if (X.resetCarMats) X.resetCarMats(); this.raceRef = null; }
       r.shadowMap.enabled = this.quality !== 'low';
       r.shadowMap.type = T.PCFSoftShadowMap;
       this.resize();

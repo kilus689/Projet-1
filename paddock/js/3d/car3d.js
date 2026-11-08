@@ -285,8 +285,9 @@
   // ---------- Matériaux ----------
   const COMPOUND = [0xd7262e, 0xf2c21b, 0xeeeeee, 0x2fbf4a];
   const matCache = new Map();
+  X.resetCarMats = () => matCache.clear();
   function materials(team, num) {
-    const key = team.color + team.color2 + num;
+    const key = team.id + team.color + team.color2 + num + '@' + X.texRes + (F1.Liveries ? ':' + F1.Liveries.version(team.id) : '');
     if (matCache.has(key)) return matCache.get(key);
     const m = {
       paint: new T.MeshPhysicalMaterial({ map: X.livery(team, num), roughness: 0.42, metalness: 0.05, clearcoat: 0.7, clearcoatRoughness: 0.12, envMapIntensity: 0.55, side: T.DoubleSide }),

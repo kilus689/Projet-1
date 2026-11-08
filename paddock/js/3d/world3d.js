@@ -171,7 +171,7 @@
     sun.position.set(night ? 0 : 900, 1600, night ? 200 : 500);
     if (quality !== 'low') {
       sun.castShadow = true;
-      const sz = quality === 'high' ? 2048 : 1024;
+      const sz = quality === 'ultra' ? 4096 : quality === 'high' ? 2048 : 1024;
       sun.shadow.mapSize.set(sz, sz);
       const c = sun.shadow.camera;
       c.left = -260; c.right = 260; c.top = 260; c.bottom = -260; c.near = 100; c.far = 4000;
