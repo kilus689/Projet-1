@@ -420,17 +420,32 @@
       const targetZoom = base * (1.15 - 0.32 * Math.min(1, sp / F1.PHYS.maxSpeed));
       const k = Math.min(1, dt * 4);
       this.cam.zoom += (targetZoom - this.cam.zoom) * Math.min(1, dt * 1.5);
-      this.cam.x += (focus.x + focus.vx * 0.28 - this.cam.x) * k;
-      this.cam.y += (focus.y + focus.vy * 0.28 - this.cam.y) * k;
+      const look = this.rotate ? 0.1 : 0.28;
+      this.cam.x += (focus.x + focus.vx * look - this.cam.x) * k;
+      this.cam.y += (focus.y + focus.vy * look - this.cam.y) * k;
 
       const z = this.cam.zoom;
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-      ctx.translate(this.w / 2, this.h / 2);
-      ctx.scale(z, z);
-      ctx.translate(-this.cam.x, -this.cam.y);
-
-      const vw = this.w / z, vh = this.h / z;
-      const V = { l: this.cam.x - vw / 2 - 60, t: this.cam.y - vh / 2 - 60, r: this.cam.x + vw / 2 + 60, b: this.cam.y + vh / 2 + 60 };
+      let V;
+      if (this.rotate) {
+        // Vue de dessus qui tourne avec la voiture (nez vers le haut de l'écran)
+        if (this.cam.a == null) this.cam.a = focus.a;
+        this.cam.a += F1.util.wrapAngle(focus.a - this.cam.a) * Math.min(1, dt * 5);
+        const ay = this.h * 0.64;
+        ctx.translate(this.w / 2, ay);
+        ctx.scale(z, z);
+        ctx.rotate(-this.cam.a - Math.PI / 2);
+        ctx.translate(-this.cam.x, -this.cam.y);
+        const R = Math.hypot(this.w / 2, ay) / z + 60;
+        V = { l: this.cam.x - R, t: this.cam.y - R, r: this.cam.x + R, b: this.cam.y + R };
+      } else {
+        this.cam.a = null;
+        ctx.translate(this.w / 2, this.h / 2);
+        ctx.scale(z, z);
+        ctx.translate(-this.cam.x, -this.cam.y);
+        const vw = this.w / z, vh = this.h / z;
+        V = { l: this.cam.x - vw / 2 - 60, t: this.cam.y - vh / 2 - 60, r: this.cam.x + vw / 2 + 60, b: this.cam.y + vh / 2 + 60 };
+      }
       const inView = (o) => !(o.r < V.l || o.l > V.r || o.b < V.t || o.t > V.b);
       const chunks = sc.chunks.filter(inView);
 
@@ -517,19 +532,23 @@
 
       for (const d of decos) if (d.t === 'tree' || d.t === 'palm') drawDeco(ctx, d);
 
-      // Codes pilotes au-dessus des voitures adverses
+      // Codes pilotes au-dessus des voitures adverses (dessinés à l'écran, jamais tournés)
+      const m = ctx.getTransform();
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       ctx.font = '700 13px system-ui, sans-serif';
       ctx.textAlign = 'center';
+      const w = 40;
       for (const car of race.cars) {
         if (car.isPlayer) continue;
         if (car.x < V.l || car.x > V.r || car.y < V.t || car.y > V.b) continue;
-        const w = 40;
+        const sx = (m.a * car.x + m.c * car.y + m.e) / this.dpr;
+        const sy = (m.b * car.x + m.d * car.y + m.f) / this.dpr - 34 * z;
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(car.x - w / 2, car.y - 50, w, 17);
+        ctx.fillRect(sx - w / 2, sy - 17, w, 17);
         ctx.fillStyle = car.team.color;
-        ctx.fillRect(car.x - w / 2, car.y - 50, 3, 17);
+        ctx.fillRect(sx - w / 2, sy - 17, 3, 17);
         ctx.fillStyle = '#fff';
-        ctx.fillText(car.code, car.x + 1, car.y - 37);
+        ctx.fillText(car.code, sx + 1, sy - 4);
       }
     }
 
@@ -586,6 +605,8 @@
   }
 
   F1.buildScene = buildScene;
+  F1.decoCell = decoCell;
+  F1.DECO_CELL = DCELL;
   F1.Renderer = Renderer;
   F1.drawCarPreview = function (canvas, team) {
     const ctx = canvas.getContext('2d');

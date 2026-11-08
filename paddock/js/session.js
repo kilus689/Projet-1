@@ -30,6 +30,7 @@
     if (e.repeat) return;
     if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
     if (e.code === 'KeyM') toggleMute();
+    if (e.code === 'KeyC') nextCamera();
     if (e.code === 'KeyR' && S.state === 'run' && S.race.player && !S.race.player.finished) {
       S.race.player.resetOnTrack(S.race.track);
     }
@@ -75,7 +76,26 @@
 
   // ---------- État ----------
   const renderer = new F1.Renderer($('game'));
+  const r3d = F1.Renderer3D ? new F1.Renderer3D(document.body) : null;
   const audio = new F1.Audio();
+
+  // ---------- Caméras ----------
+  const CAMERAS = [
+    { id: 'top', label: 'Vue de dessus', kind: '2d' },
+    { id: 'topRot', label: 'Vue de dessus (suit la voiture)', kind: '2d', rotate: true },
+    { id: 'chase', label: 'Caméra poursuite', kind: '3d' },
+    { id: 'tcam', label: 'Caméra embarquée', kind: '3d' },
+    { id: 'cockpit', label: 'Cockpit', kind: '3d' },
+  ];
+  let camIdx = 0;
+  try { camIdx = Math.max(0, CAMERAS.findIndex((c) => c.id === localStorage.getItem('paddock-cam'))); } catch (e) { /* ignoré */ }
+  function nextCamera() {
+    if (S.state === 'idle') return;
+    camIdx = (camIdx + 1) % CAMERAS.length;
+    if (CAMERAS[camIdx].kind === '3d' && !(r3d && r3d.init())) camIdx = 0; // 3D indisponible
+    try { localStorage.setItem('paddock-cam', CAMERAS[camIdx].id); } catch (e) { /* ignoré */ }
+    toast('🎥 ' + CAMERAS[camIdx].label);
+  }
   const minimapCtx = $('minimap').getContext('2d');
   const S = {
     state: 'idle', // idle (démo derrière les menus) | countdown | run | paused | done
@@ -120,7 +140,8 @@
     const o = S.opts;
     const track = F1.getTrack(o.gp);
     S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode });
-    renderer.setScene(F1.buildScene(track));
+    S.scene2d = F1.buildScene(track);
+    renderer.setScene(S.scene2d);
     renderer.snapCamera(S.race.player);
     renderer.cam.zoom = Math.min(renderer.w, renderer.h) / 800;
     S.finishTimer = 0;
@@ -148,6 +169,8 @@
 
   function stopToMenu() {
     S.state = 'idle';
+    if (r3d) r3d.show(false);
+    $('game').classList.remove('hidden');
     audio.stopEngine();
     $('hud').classList.add('hidden');
     $('touch').classList.add('hidden');
@@ -405,7 +428,17 @@
 
     if (race) {
       const focus = S.demo ? race.cars[0] : race.player;
-      renderer.draw(race, focus, S.t, S.state === 'paused' ? 0 : dt);
+      const cam = S.demo ? CAMERAS[0] : CAMERAS[camIdx];
+      const use3d = cam.kind === '3d' && r3d && r3d.init();
+      if (use3d) {
+        r3d.setTrack(race.track, S.scene2d);
+        r3d.draw(race, focus, cam.id, S.state === 'paused' ? 0 : dt);
+      } else {
+        renderer.rotate = !!cam.rotate;
+        renderer.draw(race, focus, S.t, S.state === 'paused' ? 0 : dt);
+      }
+      if (r3d) r3d.show(use3d);
+      $('game').classList.toggle('hidden', use3d);
       if (!S.demo) renderer.drawMinimap(minimapCtx, race);
     }
     requestAnimationFrame(frame);
@@ -454,7 +487,8 @@
     });
   }
 
-  window.addEventListener('resize', () => renderer.resize());
+  window.addEventListener('resize', () => { renderer.resize(); if (r3d) r3d.resize(); });
+  $('btn-cam').addEventListener('click', nextCamera);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && (S.state === 'run' || S.state === 'countdown')) togglePause();
   });
