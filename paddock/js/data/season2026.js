@@ -14,7 +14,10 @@
     { id: 'sa-2021', gp: 'Grand Prix d\'Arabie saoudite', place: 'Djeddah', circuit: 'Jeddah Corniche', flag: '🇸🇦', laps: 50, env: 'street', width: 125 },
     { id: 'us-2022', gp: 'Grand Prix de Miami', place: 'Miami', circuit: 'Miami International Autodrome', flag: '🇺🇸', laps: 57, env: 'street', width: 130 },
     { id: 'ca-1978', gp: 'Grand Prix du Canada', place: 'Montréal', circuit: 'Circuit Gilles-Villeneuve', flag: '🇨🇦', laps: 70, env: 'park', width: 125 },
-    { id: 'mc-1929', gp: 'Grand Prix de Monaco', place: 'Monte-Carlo', circuit: 'Circuit de Monaco', flag: '🇲🇨', laps: 78, env: 'street', width: 105 },
+    { id: 'mc-1929', gp: 'Grand Prix de Monaco', place: 'Monte-Carlo', circuit: 'Circuit de Monaco', flag: '🇲🇨', laps: 78, env: 'street', width: 105,
+      // Ligne sur le boulevard Albert Ier (~200 m avant Sainte-Dévote), stands côté port (à droite) :
+      // entrée après la Piscine, sortie après Sainte-Dévote
+      startShift: -195, pitSide: 1, pitEntry: -430, pitExit: 330 },
     { id: 'es-1991', gp: 'Grand Prix de Barcelone-Catalogne', place: 'Barcelone', circuit: 'Circuit de Barcelona-Catalunya', flag: '🇪🇸', laps: 66, env: 'circuit', width: 130 },
     { id: 'at-1969', gp: 'Grand Prix d\'Autriche', place: 'Spielberg', circuit: 'Red Bull Ring', flag: '🇦🇹', laps: 71, env: 'circuit', width: 130 },
     { id: 'gb-1948', gp: 'Grand Prix de Grande-Bretagne', place: 'Silverstone', circuit: 'Silverstone', flag: '🇬🇧', laps: 52, env: 'circuit', width: 140 },
@@ -23,12 +26,14 @@
     { id: 'nl-1948', gp: 'Grand Prix des Pays-Bas', place: 'Zandvoort', circuit: 'Zandvoort', flag: '🇳🇱', laps: 72, env: 'park', width: 120 },
     { id: 'it-1922', gp: 'Grand Prix d\'Italie', place: 'Monza', circuit: 'Autodromo Nazionale Monza', flag: '🇮🇹', laps: 53, env: 'park', width: 130 },
     { id: 'es-2026', gp: 'Grand Prix d\'Espagne', place: 'Madrid', circuit: 'Madring', flag: '🇪🇸', laps: 57, env: 'street', width: 125 },
-    { id: 'az-2016', gp: 'Grand Prix d\'Azerbaïdjan', place: 'Bakou', circuit: 'Baku City Circuit', flag: '🇦🇿', laps: 51, env: 'street', width: 120 },
+    { id: 'az-2016', gp: 'Grand Prix d\'Azerbaïdjan', place: 'Bakou', circuit: 'Baku City Circuit', flag: '🇦🇿', laps: 51, env: 'street', width: 120,
+      startShift: 29 }, // place Azadliq, 138 m entre la grille et le virage 1
     { id: 'sg-2008', gp: 'Grand Prix de Singapour', place: 'Singapour', circuit: 'Marina Bay', flag: '🇸🇬', laps: 62, env: 'street', width: 120, relief: 0.15 }, // relief réduit : altitude faussée par les immeubles dans les données
     { id: 'us-2012', gp: 'Grand Prix des États-Unis', place: 'Austin', circuit: 'Circuit of the Americas', flag: '🇺🇸', laps: 56, env: 'circuit', width: 140 },
     { id: 'mx-1962', gp: 'Grand Prix de Mexico', place: 'Mexico', circuit: 'Autódromo Hermanos Rodríguez', flag: '🇲🇽', laps: 71, env: 'park', width: 130 },
     { id: 'br-1940', gp: 'Grand Prix de São Paulo', place: 'São Paulo', circuit: 'Interlagos', flag: '🇧🇷', laps: 71, env: 'park', width: 130 },
-    { id: 'us-2023', gp: 'Grand Prix de Las Vegas', place: 'Las Vegas', circuit: 'Las Vegas Strip Circuit', flag: '🇺🇸', laps: 50, env: 'street', width: 130 },
+    { id: 'us-2023', gp: 'Grand Prix de Las Vegas', place: 'Las Vegas', circuit: 'Las Vegas Strip Circuit', flag: '🇺🇸', laps: 50, env: 'street', width: 130,
+      startShift: -76 }, // 200 m entre la pole et le virage 1 (guide officiel du circuit)
     { id: 'qa-2004', gp: 'Grand Prix du Qatar', place: 'Lusail', circuit: 'Lusail International Circuit', flag: '🇶🇦', laps: 57, env: 'desert', width: 135 },
     { id: 'ae-2009', gp: 'Grand Prix d\'Abu Dhabi', place: 'Yas Marina', circuit: 'Yas Marina', flag: '🇦🇪', laps: 58, env: 'desert', width: 135 },
   ];
