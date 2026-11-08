@@ -14,7 +14,7 @@
     const t = new T.CanvasTexture(c);
     if (srgb !== false) t.colorSpace = T.SRGBColorSpace;
     if (repeat) t.wrapS = t.wrapT = T.RepeatWrapping;
-    t.anisotropy = 8;
+    t.anisotropy = 16;
     return t;
   }
   // Bruit de valeur lissé (plusieurs octaves), pour des taches naturelles
@@ -408,10 +408,24 @@
     },
   };
 
+  // Résolution des livrées (largeur de l'atlas) : 1024, 2048 ou 4096 (« 4K ») selon la qualité
+  X.texRes = 1024;
   X.livery = function (team, num) {
-    const key = 'liv' + (team.id || '') + team.color + team.color2 + num;
+    // Livrée importée par le joueur (stockée sur l'appareil) : utilisée telle quelle
+    const custom = F1.Liveries && F1.Liveries.get(team.id);
+    if (custom) {
+      return once('custom' + team.id + F1.Liveries.version(team.id), () => {
+        const t = new T.Texture(custom);
+        t.colorSpace = T.SRGBColorSpace;
+        t.anisotropy = 16;
+        t.needsUpdate = true;
+        return t;
+      });
+    }
+    const key = 'liv' + (team.id || '') + team.color + team.color2 + num + '@' + X.texRes;
     return once(key, () => {
-      const W = 1024, B = 256, c = canvas(W, B * 3);
+      const W = X.texRes, B = W / 4, c = canvas(W, B * 3);
+      const PX = W / 1024; // facteur d'échelle des détails en pixels
       const g = c.getContext('2d');
       const band = (k) => B * (2 - k); // la bande 0 est en bas (v faible)
       const Y = (k, v) => band(k) + B * (1 - v);
@@ -437,7 +451,7 @@
         dots(k, u0, u1, col) {
           g.fillStyle = col;
           for (let u = u0; u < u1; u += 0.012) for (const vc of [0.3, 0.7]) {
-            const sz = 5 * (1 - (u - u0) / (u1 - u0));
+            const sz = 5 * PX * (1 - (u - u0) / (u1 - u0));
             for (let dv = -0.08; dv <= 0.08; dv += 0.04) g.fillRect(W * u, Y(k, vc + dv), sz, sz);
           }
         },
@@ -450,7 +464,8 @@
           }
         },
         carbonWeave() {
-          for (let y = 0; y < B * 3; y += 6) for (let x = (y / 6) % 2 ? 0 : 6; x < W; x += 12) { g.fillStyle = 'rgba(255,255,255,0.035)'; g.fillRect(x, y, 6, 6); }
+          const q = 6 * PX;
+          for (let y = 0; y < B * 3; y += q) for (let x = Math.round(y / q) % 2 ? 0 : q; x < W; x += 2 * q) { g.fillStyle = 'rgba(255,255,255,0.035)'; g.fillRect(x, y, q, q); }
         },
       };
       const design = DESIGNS[team.id];
@@ -467,6 +482,7 @@
         g.translate(x, y);
         if (rot) g.rotate(rot);
         g.scale(sx, sy);
+        size *= PX;
         g.font = `italic 800 ${size}px "Barlow Condensed", Arial Narrow, sans-serif`;
         g.textAlign = 'center';
         g.textBaseline = 'middle';
