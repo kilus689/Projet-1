@@ -438,3 +438,5 @@ kbd {
 
 .touch-mode .tyre-panel { bottom: auto; top: 54px; left: 50%; transform: translateX(-50%); flex-direction: row; align-items: center; }
 .touch-mode .tv-banner { bottom: auto; top: 130px; }
+
+.pole-ref { font-size: 16px; font-weight: 700; color: var(--purple); margin: 2px 0; }

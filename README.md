@@ -117,6 +117,18 @@ js/session.js         Boucle de jeu, entrées, séances pilotées
 js/ui.js              Menus et tableau de bord de la carrière
 ```
 
+## Calage sur les vrais chronos
+
+- **Longueur** : chaque tracé est mis à l'échelle de la longueur officielle du circuit (écart < 0,15 %).
+- **Voitures** : accélération et freinage d'une F1 2026 (0-100 km/h ≈ 2 s, 0-200 ≈ 4,5 s,
+  pointe ≈ 314 km/h, ≈ 345 km/h avec batterie et aéro active, freinage ≈ 5,5 g à haute vitesse).
+- **Circuits** : une adhérence propre à chaque circuit est calée pour que le tour parfait du jeu
+  donne le temps de la **pole position réelle 2026** (écart < 0,05 %). Pour Bahreïn et Djeddah
+  (annulés en 2026), Las Vegas, le Qatar et Abu Dhabi (pas encore courus) et Interlagos (pole 2026
+  sous la pluie), la cible est la pole précédente × 1,029 (écart moyen observé 2025 → 2026).
+- La pole réelle est affichée dans les réglages, le week-end de carrière et après chaque tour de
+  qualification (avec votre écart).
+
 ## Ligne de départ et stands
 
 Le départ et la voie des stands sont placés sur la ligne droite principale. Corrections faites
