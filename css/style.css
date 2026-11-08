@@ -26,7 +26,7 @@ html, body {
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
 }
-canvas#game { position: fixed; inset: 0; display: block; }
+canvas#game, canvas#game3d { position: fixed; inset: 0; display: block; }
 .hidden { display: none !important; }
 
 button {

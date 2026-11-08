@@ -44,6 +44,18 @@ Chaque Grand Prix : qualifications puis course, chacune **jouée ou simulée**.
 Barème 25-18-15-12-10-8-6-4-2-1, classements pilotes et constructeurs, calendrier avec résultats,
 enchaînement des saisons (évolution des pilotes et des voitures). Sauvegarde automatique dans le navigateur.
 
+## Caméras
+
+Touche **C** ou bouton 🎥 pendant une séance (le choix est mémorisé) :
+
+- **Vue de dessus** : carte fixe, nord en haut.
+- **Vue de dessus (suit la voiture)** : la voiture pointe toujours vers le haut de l'écran.
+- **Caméra poursuite** (3D) : derrière la voiture.
+- **Caméra embarquée** (3D) : au-dessus du pilote.
+- **Cockpit** (3D) : à la place du pilote, avec halo et volant.
+
+Les vues 3D utilisent [three.js](https://threejs.org) (inclus dans `js/vendor/`, licence MIT).
+
 ## Commandes
 
 | Action | Clavier | Manette |
@@ -54,6 +66,7 @@ enchaînement des saisons (évolution des pilotes et des voitures). Sauvegarde a
 | Se replacer sur la piste | R | |
 | Pause | Échap / P | Start |
 | Couper le son | M | |
+| Changer de caméra | C | |
 
 Sur mobile, des boutons tactiles s'affichent à l'écran.
 

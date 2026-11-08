@@ -1,7 +1,7 @@
 'use strict';
 // Service worker : permet de jouer hors ligne une fois l'application installée.
 // Changer VERSION à chaque mise à jour pour forcer le rechargement des fichiers.
-const VERSION = 'paddock-v1';
+const VERSION = 'paddock-v2';
 const FILES = [
   './',
   './index.html',
@@ -12,6 +12,8 @@ const FILES = [
   './js/core.js',
   './js/career.js',
   './js/render.js',
+  './js/vendor/three.min.js',
+  './js/render3d.js',
   './js/audio.js',
   './js/session.js',
   './js/ui.js',
