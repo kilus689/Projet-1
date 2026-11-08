@@ -269,9 +269,9 @@
     }
 
     computePit() {
-      const N = this.n, half = this.half, run = this.runoff;
+      const N = this.n, half = this.half, run = this.runoff, def = this.def || {};
       let best = null;
-      for (const side of [1, -1]) {
+      for (const side of def.pitSide ? [def.pitSide] : [1, -1]) {
         const off = side * (half + run + 175);
         const ok = (t) => {
           const p = this.pts[((t % N) + N) % N];
@@ -286,6 +286,9 @@
       if (best.z - best.a < 100) { best.a = -150; best.z = 50; }
       const lane = half + run + 29;
       this.pit = { side: best.side, a: best.a, z: best.z, lane, entry: best.a - 150, exit: best.z + 150 };
+      // Entrée / sortie réelles connues (mètres par rapport à la ligne)
+      if (def.pitEntry != null) { this.pit.entry = def.pitEntry; this.pit.a = Math.max(def.pitEntry + 120, this.pit.a); }
+      if (def.pitExit != null) { this.pit.exit = def.pitExit; this.pit.z = Math.min(def.pitExit - 120, Math.max(this.pit.z, 40)); }
     }
 
     // Indice relatif à la ligne de départ (négatif avant la ligne)
@@ -452,7 +455,28 @@
   const trackCache = new Map();
   F1.getTrack = function (gp) {
     if (!trackCache.has(gp.id)) {
-      trackCache.set(gp.id, new Track(Object.assign({ poly: F1.SHAPES[gp.id], name: gp.circuit }, gp)));
+      let poly = F1.SHAPES[gp.id];
+      // Ligne de départ déplacée (startShift en mètres, négatif = plus tôt sur le tour)
+      if (gp.startShift) {
+        const tmp = new Track(Object.assign({ poly, name: gp.circuit }, gp, { id: null }));
+        const target = tmp.pts[((Math.round(gp.startShift * 10 / tmp.spacing) % tmp.n) + tmp.n) % tmp.n];
+        // On insère un sommet exactement sur la nouvelle ligne, puis le tracé commence par lui
+        const tx = target.x - 3000, ty = target.y - 3000, n = poly.length / 2;
+        let best = 0, bd = Infinity, bx = tx, by = ty;
+        for (let i = 0; i < n; i++) {
+          const ax = poly[i * 2], ay = poly[i * 2 + 1], cx = poly[((i + 1) % n) * 2], cy = poly[((i + 1) % n) * 2 + 1];
+          const dx = cx - ax, dy = cy - ay, L = dx * dx + dy * dy || 1;
+          const t = Math.max(0, Math.min(1, ((tx - ax) * dx + (ty - ay) * dy) / L));
+          const px = ax + dx * t, py = ay + dy * t, d = (px - tx) ** 2 + (py - ty) ** 2;
+          if (d < bd) { bd = d; best = i; bx = px; by = py; }
+        }
+        const pts = [];
+        for (let i = 0; i < n; i++) pts.push([poly[i * 2], poly[i * 2 + 1]]);
+        pts.splice(best + 1, 0, [Math.round(bx), Math.round(by)]);
+        const rot = pts.slice(best + 1).concat(pts.slice(0, best + 1)).filter((p, i, arr) => i === 0 || Math.hypot(p[0] - arr[i - 1][0], p[1] - arr[i - 1][1]) > 30);
+        poly = [].concat(...rot);
+      }
+      trackCache.set(gp.id, new Track(Object.assign({}, gp, { poly, name: gp.circuit })));
     }
     return trackCache.get(gp.id);
   };
@@ -534,6 +558,8 @@
       const pw = this.power * (1 + ers);
 
       const maxS = P.maxSpeed * pw * (1 + 0.045 * aero) * (this.offTrack ? P.offTrackMax : 1);
+      // Si la voiture recule (rebond sur un mur) et qu'on accélère : on freine d'abord le recul
+      if (inp.throttle > 0 && vF < 0) vF = Math.min(0, vF + P.brake * inp.throttle * dt);
       if (inp.throttle > 0 && vF > -10) {
         const r = Math.max(0, vF / maxS);
         vF += P.accel * pw * C.accel * inp.throttle * Math.max(0, 1 - Math.pow(r, 1.7)) * dt;
@@ -587,11 +613,16 @@
         this.y -= p.ny * (ad - lim) * s;
         const vn = this.vx * p.nx + this.vy * p.ny;
         if (vn * s > 0) {
-          this.wallHit = Math.max(this.wallHit, Math.abs(vn));
-          this.vx -= p.nx * vn * 1.35;
-          this.vy -= p.ny * vn * 1.35;
-          this.vx *= 0.75;
-          this.vy *= 0.75;
+          const imp = Math.abs(vn);
+          this.wallHit = Math.max(this.wallHit, imp);
+          // On retire la vitesse vers le mur (petit rebond seulement si le choc est franc)
+          const bounce = imp > 120 ? 1.3 : 1.0;
+          this.vx -= p.nx * vn * bounce;
+          this.vy -= p.ny * vn * bounce;
+          // Frottement proportionnel à la violence du choc : frôler le mur ne bloque plus la voiture
+          const keep = 1 - Math.min(0.45, imp / 900);
+          this.vx *= keep;
+          this.vy *= keep;
         }
       }
       this.alongTrack = this.vx * p.tx + this.vy * p.ty;

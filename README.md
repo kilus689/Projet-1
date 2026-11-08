@@ -117,6 +117,14 @@ js/session.js         Boucle de jeu, entrées, séances pilotées
 js/ui.js              Menus et tableau de bord de la carrière
 ```
 
+## Ligne de départ et stands
+
+Le départ et la voie des stands sont placés sur la ligne droite principale. Corrections faites
+à partir de sources publiques : Monaco (ligne sur le boulevard Albert Ier, stands côté port,
+entrée avant Anthony-Noghès, sortie après Sainte-Dévote), Las Vegas (200 m de la pole au virage 1)
+et Bakou (138 m entre la grille et le virage 1). Réglages par circuit dans `js/data/season2026.js`
+(`startShift`, `pitSide`, `pitEntry`, `pitExit`).
+
 ## Calendrier
 
 Le jeu reprend les 24 manches du calendrier 2026 publié en 2025. Les Grands Prix de Bahreïn et
