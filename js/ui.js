@@ -123,10 +123,21 @@
         h('h1', null, 'Paddock ', h('span', null, '2026')),
         h('p', { class: 'subtitle' }, '24 circuits · 11 écuries · 22 pilotes · mode carrière')),
       h('div', { class: 'home-list' }, items),
+      installHint(),
       h('details', { class: 'help' },
         h('summary', null, 'Commandes'),
         h('ul', { html: '<li><kbd>↑</kbd> / <kbd>W</kbd> / <kbd>Z</kbd> : accélérer · <kbd>↓</kbd> / <kbd>S</kbd> : freiner</li><li><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>Q</kbd> <kbd>D</kbd> : tourner</li><li><kbd>R</kbd> : se replacer · <kbd>Échap</kbd> / <kbd>P</kbd> : pause · <kbd>M</kbd> : son</li><li>Manette : stick gauche, RT / LT · Mobile : boutons à l\'écran</li>' })),
       h('p', { class: 'disclaimer' }, 'Jeu de fan non officiel, sans lien avec la Formule 1, la FIA ou les écuries. Tracés : données ouvertes « f1-circuits » (licence MIT).')));
+  }
+
+  // Aide à l'installation sur iPhone / iPad (Safari, hors application installée)
+  function installHint() {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = navigator.standalone || window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches;
+    if (!ios || standalone || window.self !== window.top) return null;
+    return h('div', { class: 'install-hint' },
+      h('b', null, '📲 Installer le jeu sur cet appareil'),
+      h('span', null, 'Touchez le bouton Partager ', h('span', { class: 'share-ico' }, '⬆︎'), ' de Safari, puis « Sur l\'écran d\'accueil ». Le jeu s\'ouvrira en plein écran, même hors connexion.'));
   }
 
   // ---------- Course rapide ----------
