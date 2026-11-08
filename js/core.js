@@ -33,9 +33,10 @@
     // Valeurs calées sur une F1 2026 : 0-100 km/h ≈ 2 s, 0-200 ≈ 4,5 s, pointe ≈ 314 km/h
     // (≈ 345 km/h avec batterie et aéro active), freinage ≈ 5,5 g à haute vitesse
     maxSpeed: 975, // px/s
-    accel: 145,
+    accel: 128,
     accelExp: 3.2,
-    brake: 600,
+    brake: 470,
+    highSpeedSteer: 0.62, // perte de vivacité en virage à haute vitesse
     reverseMax: 220,
     steerRate: 2.7, // rad/s
     grip: 9,
@@ -302,11 +303,17 @@
       const N = this.n, sp = this.spacing;
       const vc = new Float32Array(N);
       const sr = PHYS.steerRate * k;
-      const kSteer = (0.42 * sr) / PHYS.maxSpeed;
       for (let i = 0; i < N; i++) {
         let kmax = 0;
         for (let j = -6; j <= 6; j++) kmax = Math.max(kmax, Math.abs(this.k[(i + j + N) % N]));
-        vc[i] = Math.min(PHYS.maxSpeed * 1.05, (sr * 0.9) / (kmax + kSteer));
+        // Vitesse la plus haute telle que le taux de lacet disponible suffise : v·k ≤ 0,9·sr·(1 − h·(v/vmax)^0,8)
+        let lo = 0, hi = PHYS.maxSpeed * 1.05;
+        for (let it = 0; it < 22; it++) {
+          const v = (lo + hi) / 2;
+          const ok = v * kmax <= 0.9 * sr * (1 - PHYS.highSpeedSteer * Math.pow(Math.min(1, v / PHYS.maxSpeed), 0.8));
+          if (ok) lo = v; else hi = v;
+        }
+        vc[i] = lo;
       }
       const vp = new Float32Array(vc);
       const b = PHYS.brake * 0.72;
@@ -565,7 +572,8 @@
       let vF = this.vx * fx + this.vy * fy;
       const absF = Math.abs(vF);
       const low = Math.min(1, absF / 160);
-      const high = 1 - 0.42 * Math.min(1, absF / P.maxSpeed);
+      // Plus la voiture va vite, plus le rayon de braquage s'agrandit (comme une vraie F1)
+      const high = 1 - P.highSpeedSteer * Math.pow(Math.min(1, absF / P.maxSpeed), 0.8);
       this.a += this.steer * P.steerRate * (track.gripK || 1) * C.steer * (aero ? 0.82 : 1) * low * high * Math.sign(vF) * (this.offTrack ? 0.8 : 1) * dt;
       this.a = wrapAngle(this.a);
 
