@@ -945,8 +945,15 @@
 
     // ---------- Arrêts au stand ----------
     maybeEnterPit(car) {
-      if (!car.pitReq || car.finished || this.mode !== 'race') return;
+      if (car.finished || this.mode !== 'race') return;
       const P = this.track.pit, d = this.track.rel(car.idx);
+      // Le joueur peut aussi entrer simplement en se dirigeant vers l'entrée des stands
+      if (!car.pitReq && car.isPlayer && d >= P.entry - 60 && d <= P.entry + 60 &&
+          Math.sign(car.lat) === P.side && Math.abs(car.lat) > this.track.half * 0.45) {
+        car.pitReq = true;
+        if (!car.nextTyre) car.nextTyre = this.bestTyreFor(this.lapsLeft(car) - 0.3);
+      }
+      if (!car.pitReq) return;
       if (d >= P.entry - 40 && d <= P.entry + 3) {
         const span = P.z - P.a - 40;
         car.pit = { d, v: car.speed, stopD: P.a + 20 + (Math.min(10, car.garage) / 10) * span, phase: 'in', stopT: 0, t0: this.time };

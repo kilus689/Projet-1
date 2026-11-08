@@ -345,7 +345,7 @@
         const fence = tx.chainlink().clone(); fence.needsUpdate = true;
         fence.repeat.set(1, 6);
         add(wall(track, fOff, top, 38, 12, (i) => free(i) && !onRamp(i, sd)), std({ map: fence, transparent: false, alphaTest: 0.5, metalness: 0.6, roughness: 0.5 }), false);
-        for (let i = 0; i < N; i += 6) if (free(i)) fencePosts.push({ i, off: fOff });
+        for (let i = 0; i < N; i += 6) if (free(i) && !onRamp(i, sd) && !inPit(i, sd)) fencePosts.push({ i, off: fOff });
       }
     }
     const postMat = std({ color: 0x8b9096, metalness: 0.7, roughness: 0.4 });
@@ -460,6 +460,7 @@
         if (corner[i] && Math.abs(track.k[i]) > TH) return;
         const p = track.pts[i];
         const sd = r.outside;
+        if (inPit(i, sd) || onRamp(i, sd)) return;
         const off = sd * (half + 26);
         const grp = new T.Group();
         const panel = new T.Mesh(new T.PlaneGeometry(9, 11), new T.MeshStandardMaterial({ map: tx.board(String(dist)), roughness: 0.6 }));
@@ -477,7 +478,7 @@
     const huts = [];
     for (let i = 60, k = 0; i < N; i += 160, k++) {
       const sd = k % 2 ? 1 : -1;
-      if (inPit(i, sd)) continue;
+      if (inPit(i, sd) || onRamp(i, sd)) continue;
       const off = sd * (half + run + 14);
       const p = track.pts[i];
       if (track.distTo(p.x + p.nx * off, p.y + p.ny * off) < Math.abs(off) - 6) continue;
@@ -491,6 +492,7 @@
       const poles = [];
       for (let i = 0, k = 0; i < N; i += 28, k++) {
         const sd = k % 2 ? 1 : -1;
+        if (inPit(i, sd) || onRamp(i, sd)) continue; // jamais de mât sur la voie des stands
         const off = sd * (half + run + 22);
         const p = track.pts[i];
         if (track.distTo(p.x + p.nx * off, p.y + p.ny * off) < Math.abs(off) - 6) continue;
