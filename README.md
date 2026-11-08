@@ -1,7 +1,11 @@
-# Grand Prix des Îles
+# Paddock 2026
 
-Jeu de course de monoplaces (style Formule 1) en vue de dessus, jouable directement dans le navigateur.
+Jeu de course de monoplaces en vue de dessus, avec mode carrière, sur la saison 2026.
 HTML5 Canvas + JavaScript, **aucune dépendance ni étape de compilation**.
+
+> Jeu de fan non officiel, sans lien avec la Formule 1, la FIA, les écuries ou les pilotes.
+> Aucun logo ni élément graphique officiel n'est utilisé. Les notes des pilotes et des voitures
+> sont des estimations propres au jeu.
 
 ## Lancer le jeu
 
@@ -12,16 +16,33 @@ python3 -m http.server 8000
 # puis ouvrir http://localhost:8000
 ```
 
-## Fonctionnalités
+## Contenu
 
-- 3 circuits originaux : Circuit des Lagons, Anneau du Volcan, Côte de Corail
-- 8 monoplaces sur la grille : vous + 7 adversaires pilotés par l'IA (trajectoire, freinage, évitement)
-- Feux de départ, chronos au tour, meilleur tour, classement en direct avec écarts, mini-carte
-- 3 niveaux de difficulté, 1 / 3 / 5 / 10 tours, choix de l'écurie et du nom du pilote
-- Physique arcade : adhérence, dérapage, bacs à sable, murs de pneus, collisions
-- Traces de pneus, poussière, sons de moteur synthétisés (Web Audio)
-- Records par circuit sauvegardés dans le navigateur
-- Clavier, manette et commandes tactiles (mobile)
+- **24 circuits du calendrier 2026**, aux tracés réels (de Melbourne à Abu Dhabi, Madring compris).
+  Échelle réelle : 1 px = 10 cm, longueurs à ±1 % des longueurs officielles.
+- **11 écuries et 22 pilotes 2026** (numéros de l'engagement officiel), plus 8 pilotes libres fictifs.
+- Décor selon le circuit : parc, circuit permanent, désert ou circuit urbain (murs, immeubles).
+
+## Modes de jeu
+
+### Course rapide
+Choisissez le circuit, le pilote, la distance (3 tours, 5 tours, 25 %, 50 % ou 100 %),
+la difficulté, et des qualifications jouées ou simulées.
+
+### Carrière
+- **Mode pilote**
+  - incarner l'un des 22 pilotes 2026 dans son écurie ;
+  - ou **créer une nouvelle écurie** (la 12e : nom, couleurs, motoriste), puis **créer son pilote**
+    ou **recruter un pilote 2026** (un pilote libre le remplace dans son ancienne écurie).
+  - Réputation, duel avec le coéquipier, offres de contrat en fin de saison.
+- **Mode écurie**
+  - reprendre l'une des 11 écuries 2026 ;
+  - ou **créer la 12e écurie** et recruter deux pilotes (pilotes libres ou pilote créé).
+  - Budget, développement de la voiture (aéro, châssis, fiabilité), choix du pilote piloté.
+
+Chaque Grand Prix : qualifications puis course, chacune **jouée ou simulée**.
+Barème 25-18-15-12-10-8-6-4-2-1, classements pilotes et constructeurs, calendrier avec résultats,
+enchaînement des saisons (évolution des pilotes et des voitures). Sauvegarde automatique dans le navigateur.
 
 ## Commandes
 
@@ -34,23 +55,29 @@ python3 -m http.server 8000
 | Pause | Échap / P | Start |
 | Couper le son | M | |
 
+Sur mobile, des boutons tactiles s'affichent à l'écran.
+
 ## Structure
 
 ```
-index.html        Page, HUD et menus
-css/style.css     Styles
-js/data.js        Circuits, écuries, pilotes, difficultés
-js/core.js        Simulation : piste, physique, IA, logique de course (sans DOM)
-js/render.js      Rendu Canvas (piste, décor, voitures, effets, mini-carte)
-js/audio.js       Sons synthétisés
-js/game.js        Boucle de jeu, entrées, interface
+index.html            Page, HUD
+css/style.css         Styles
+js/data/circuits.js   Tracés des 24 circuits (générés depuis les données GeoJSON)
+js/data/season2026.js Calendrier, écuries, pilotes, motoristes, barème
+js/core.js            Simulation : piste, physique, IA, course (sans DOM, testable avec Node)
+js/career.js          Carrière : création, simulation des séances, points, budget, saisons
+js/render.js          Rendu Canvas (piste, décor, voitures, effets, mini-carte)
+js/audio.js           Sons synthétisés (Web Audio)
+js/session.js         Boucle de jeu, entrées, séances pilotées
+js/ui.js              Menus et tableau de bord de la carrière
 ```
 
-### Ajouter un circuit
+## Calendrier
 
-Ajoutez une entrée dans `F1.TRACKS` (`js/data.js`) : une liste de points de contrôle
-reliés par une spline fermée. Le premier point est la ligne de départ et doit se trouver
-sur une ligne droite. Évitez que deux portions de piste passent à moins d'environ
-4 unités l'une de l'autre (avec `scale: 125`).
+Le jeu reprend les 24 manches du calendrier 2026 publié en 2025. Les Grands Prix de Bahreïn et
+d'Arabie saoudite ont ensuite été annulés pendant la saison réelle ; ils sont conservés dans le jeu.
 
-Toutes les écuries, pilotes et circuits sont fictifs.
+## Crédits
+
+Tracés des circuits : jeu de données [f1-circuits](https://github.com/bacinger/f1-circuits)
+de Tomislav Bacinger, sous licence MIT (voir `THIRD_PARTY_NOTICES.md`).
