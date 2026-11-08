@@ -265,7 +265,8 @@
   };
 
   // Ciel équirectangulaire : dégradé, nuages et soleil (jour) ou étoiles (nuit)
-  X.skyTexture = function (night, seed) {
+  X.skyTexture = function (night, seed, weather) {
+    const overcast = weather === 'rain' || weather === 'cloudy';
     const w = 1024, h = 512;
     const c = canvas(w, h);
     const g = c.getContext('2d');
@@ -273,7 +274,9 @@
     if (night) {
       gr.addColorStop(0, '#02040b'); gr.addColorStop(0.75, '#0b1530'); gr.addColorStop(1, '#2a3550');
     } else {
-      gr.addColorStop(0, '#2f6fbf'); gr.addColorStop(0.6, '#79aee6'); gr.addColorStop(1, '#dbe9f5');
+      if (weather === 'rain') { gr.addColorStop(0, '#6b737c'); gr.addColorStop(0.6, '#8f979f'); gr.addColorStop(1, '#b4bbc1'); }
+      else if (overcast) { gr.addColorStop(0, '#7f97b3'); gr.addColorStop(0.6, '#a9bacb'); gr.addColorStop(1, '#d6dde3'); }
+      else { gr.addColorStop(0, '#2f6fbf'); gr.addColorStop(0.6, '#79aee6'); gr.addColorStop(1, '#dbe9f5'); }
     }
     g.fillStyle = gr; g.fillRect(0, 0, w, h / 2);
     g.fillStyle = night ? '#1c2233' : '#c9d6df';
@@ -296,11 +299,11 @@
         for (let x = 0; x < w; x++) {
           const i = y * w + x;
           let v = n[i] * 0.75 + n2[i] * 0.25;
-          v = Math.max(0, (v - 0.55) * 3.2) * (0.35 + horizon * 0.65);
+          v = Math.max(0, (v - (weather === 'rain' ? 0.2 : overcast ? 0.35 : 0.55)) * 3.2) * (overcast ? 0.9 : 0.35 + horizon * 0.65);
           if (v > 0) {
             const a = Math.min(0.92, v);
             const k = i * 4;
-            const shade = 255 - (1 - n2[i]) * 30;
+            const shade = (weather === 'rain' ? 150 : overcast ? 215 : 255) - (1 - n2[i]) * 30;
             img.data[k] = img.data[k] * (1 - a) + shade * a;
             img.data[k + 1] = img.data[k + 1] * (1 - a) + shade * a;
             img.data[k + 2] = img.data[k + 2] * (1 - a) + (shade + 4) * a;
@@ -308,6 +311,7 @@
         }
       }
       g.putImageData(img, 0, 0);
+      if (overcast) { const t = toTex(c); t.mapping = T.EquirectangularReflectionMapping; return t; }
       const sx = w * 0.62, sy = h * 0.18;
       const sg = g.createRadialGradient(sx, sy, 2, sx, sy, 90);
       sg.addColorStop(0, 'rgba(255,255,240,1)'); sg.addColorStop(0.12, 'rgba(255,250,220,0.9)'); sg.addColorStop(1, 'rgba(255,240,200,0)');

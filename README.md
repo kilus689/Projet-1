@@ -31,8 +31,21 @@ python3 -m http.server 8000
 ## Modes de jeu
 
 ### Course rapide
-Choisissez le circuit, le pilote, la distance (3 tours, 5 tours, 25 %, 50 % ou 100 %),
-la difficulté, et des qualifications jouées ou simulées.
+En 4 étapes : **circuit** (liste des 24 Grands Prix avec le drapeau du pays) → **écurie** →
+**pilote** de l'écurie → **réglages** : météo (sec, nuageux, pluie, aléatoire), difficulté de l'IA,
+aides au pilotage, sensibilité de la direction, aéro active, distance et qualifications.
+
+### Batterie, aéro active, météo et aides
+- **Batterie (ERS)** : se vide en accélérant, se recharge au freinage et au lever de pied ;
+  batterie vide = perte de puissance. **Boost** (⚡ / touche E) : plus de puissance, consommation accrue.
+  L'IA gère aussi sa batterie et utilise le boost pour attaquer.
+- **Aéro active** (lignes droites de plus de 300 m) : moins de traînée et plus de vitesse, mais
+  moins d'adhérence ; se referme au freinage. Modes : automatique, manuel (AÉRO / Espace), désactivé.
+- **Météo** : la pluie réduit l'adhérence, le freinage et la motricité (IA comprise). En carrière,
+  la météo est tirée selon le climat du circuit (pluie fréquente à Spa, Interlagos, Silverstone…).
+- **Aides** : freinage assisté, antipatinage / stabilité, direction assistée, trajectoire idéale
+  (verte, rouge aux freinages). **Sensibilité de la direction** : faible, moyenne ou forte
+  (rampe de braquage et braquage réduit à haute vitesse).
 
 ### Carrière
 - **Mode pilote**
@@ -70,6 +83,8 @@ Les vues 3D utilisent [three.js](https://threejs.org) (inclus dans `js/vendor/`,
 | Tourner | ← → / A Q D | Stick gauche |
 | Se replacer sur la piste | R | |
 | Pause | Échap / P | Start |
+| Boost (batterie) | E / Maj | RB |
+| Aéro active (mode manuel) | Espace | LB |
 | Couper le son | M | |
 | Changer de caméra | C | |
 

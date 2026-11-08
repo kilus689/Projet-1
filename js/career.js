@@ -165,7 +165,8 @@
     return { order, times };
   };
 
-  C.simRace = function (c, gp, grid) {
+  C.simRace = function (c, gp, grid, weather) {
+    const wet = weather === 'rain';
     const r = rng(c.seed + c.round * 977 + c.season * 7);
     const laps = gp.laps;
     const ref = F1.refLapTime(F1.getTrack(gp));
@@ -176,8 +177,9 @@
       const craft = (d.craft - 80) / 100;
       const pace = 1.03 + (1 - p) * 0.04 - craft * 0.01;
       // temps total = rythme × tours + pénalité de position de départ + aléas
-      const total = ref * pace * laps + g * 0.55 + gauss(r) * (6 + laps * 0.12) * (1.1 - d.craft / 100 * 0.5);
-      const dnf = r() < ((100 - t.reliability) / 100) * 0.16 + 0.005;
+      // Sous la pluie : plus d'écarts, plus d'erreurs ; les pilotes expérimentés s'en sortent mieux
+      const total = ref * pace * laps * (wet ? 1.15 : 1) + g * 0.55 + gauss(r) * (6 + laps * 0.12) * (1.1 - d.craft / 100 * 0.5) * (wet ? 1.8 : 1);
+      const dnf = r() < ((100 - t.reliability) / 100) * 0.16 + 0.005 + (wet ? 0.04 * (1.2 - d.craft / 100) : 0);
       const best = ref * pace * (0.985 + r() * 0.01);
       return { id, total, dnf, best, dnfLap: dnf ? 1 + Math.floor(r() * (laps - 1)) : laps };
     });

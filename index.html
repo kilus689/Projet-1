@@ -42,6 +42,11 @@
         <span id="hud-gear" class="gear">N</span>
         <span id="hud-speed" class="speed">0</span>
         <span class="unit">km/h</span>
+        <div class="ers">
+          <div class="ers-top"><span class="label">Batterie</span><span id="hud-batt-val">85 %</span></div>
+          <div class="batt"><span id="hud-batt-fill"></span></div>
+          <div class="ers-flags"><span id="hud-aero" class="aero">AÉRO Z</span><span id="hud-boost" class="boost-flag">BOOST</span></div>
+        </div>
       </div>
     </div>
     <div id="lights" class="hidden">
@@ -63,6 +68,10 @@
       <button data-key="right" aria-label="Droite">▶</button>
     </div>
     <div class="touch-right">
+      <div class="touch-extra">
+        <button data-key="aero" id="touch-aero" class="small aero-btn" aria-label="Aéro active">AÉRO</button>
+        <button data-key="boost" class="small boost-btn" aria-label="Boost">⚡</button>
+      </div>
       <button data-key="brake" class="brake" aria-label="Freiner">FREIN</button>
       <button data-key="gas" class="gas" aria-label="Accélérer">GAZ</button>
     </div>
@@ -77,6 +86,7 @@
   <script src="js/data/season2026.js"></script>
   <script src="js/data/elevation.js"></script>
   <script src="js/core.js"></script>
+  <script src="js/settings.js"></script>
   <script src="js/career.js"></script>
   <script src="js/render.js"></script>
   <script src="js/vendor/three.min.js"></script>

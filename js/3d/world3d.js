@@ -141,7 +141,8 @@
   }
 
   // ---------- Construction ----------
-  X.buildWorld = function (track, scene2d, quality) {
+  X.buildWorld = function (track, scene2d, quality, weather) {
+    const rain = weather === 'rain', cloudy = weather === 'cloudy';
     const s = new T.Scene();
     const id = track.id, night = NIGHT.has(id);
     const env = track.env;
@@ -154,18 +155,19 @@
     info.groundY = groundY;
 
     // Ciel, brouillard, reflets
-    const sky = X.skyTexture(night, id.length * 7);
+    const sky = X.skyTexture(night, id.length * 7, weather);
     const dome = new T.Mesh(new T.SphereGeometry(20000, 32, 16), new T.MeshBasicMaterial({ map: sky, side: T.BackSide, fog: false, depthWrite: false }));
     dome.renderOrder = -1;
     s.add(dome);
     info.dome = dome;
-    s.fog = new T.Fog(night ? 0x1c2436 : 0xd2e1ec, night ? 2500 : 4500, night ? 14000 : 19000);
+    s.fog = rain ? new T.Fog(night ? 0x161c28 : 0x9aa3ac, 1200, night ? 7000 : 9000)
+      : new T.Fog(night ? 0x1c2436 : cloudy ? 0xc6ced6 : 0xd2e1ec, night ? 2500 : 4500, night ? 14000 : cloudy ? 16000 : 19000);
     info.sky = sky;
 
     // Lumières
-    const hemi = new T.HemisphereLight(night ? 0xc8d4ff : 0xdbe8ff, night ? 0x2a2a33 : 0x6b6450, night ? 1.6 : 1.25);
+    const hemi = new T.HemisphereLight(night ? 0xc8d4ff : 0xdbe8ff, night ? 0x2a2a33 : 0x6b6450, night ? 1.6 : rain ? 1.15 : cloudy ? 1.35 : 1.25);
     s.add(hemi);
-    const sun = new T.DirectionalLight(night ? 0xe8efff : 0xfff1dc, night ? 1.6 : 3.0);
+    const sun = new T.DirectionalLight(night ? 0xe8efff : 0xfff1dc, night ? 1.6 : rain ? 0.7 : cloudy ? 1.4 : 3.0);
     sun.position.set(night ? 0 : 900, 1600, night ? 200 : 500);
     if (quality !== 'low') {
       sun.castShadow = true;
@@ -269,7 +271,7 @@
       const rub = 0.3 * Math.exp(-(d * d) / (2 * 15 * 15));
       const edge = Math.abs(o) > half * 0.8 ? 0.12 : 0;
       return 1.05 - rub + edge * 0.5;
-    }), std({ map: asph, vertexColors: true, roughness: 0.85 }));
+    }), std({ map: asph, vertexColors: true, roughness: rain ? 0.28 : 0.85, metalness: rain ? 0.25 : 0, color: rain ? 0x8a8d92 : 0xffffff }));
     // Lignes blanches de bord de piste
     const white = std({ color: 0xf4f4f4, roughness: 0.6 });
     add(ribbon(track, [-half, -half + 4], 0.58, 400), white);
@@ -560,6 +562,27 @@
         col.set(d.c);
         return true;
       }, { cast: true });
+    }
+
+    // Trajectoire idéale (affichée seulement si l'aide est activée)
+    {
+      const RL = track.racingLine();
+      const pos = [], col = [], idx = [];
+      for (let i = 0; i <= N; i++) {
+        const ii = i % N, p = track.pts[ii], l = RL.lat[ii], y = 0.75 + H(ii);
+        pos.push(p.x + p.nx * (l - 3.5), y, p.y + p.ny * (l - 3.5), p.x + p.nx * (l + 3.5), y, p.y + p.ny * (l + 3.5));
+        const c = RL.brake[ii] ? [0.95, 0.15, 0.12] : [0.15, 0.9, 0.35];
+        col.push(...c, ...c);
+        if (i) { const a = (i - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+      }
+      const g = new T.BufferGeometry();
+      g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+      g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+      g.setIndex(idx);
+      const m = new T.Mesh(g, new T.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false, side: T.DoubleSide }));
+      m.visible = false;
+      s.add(m);
+      info.racingLine = m;
     }
 
     if (track.bridges && track.bridges.length) {
