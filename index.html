@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0f14">
+  <title>Grand Prix des Îles</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,700;0,800;1,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- Interface de course -->
+  <div id="hud" class="hidden">
+    <div class="hud-top-left">
+      <div class="panel big-stats">
+        <div><span class="label">Position</span><span id="hud-pos" class="value">–</span></div>
+        <div><span class="label">Tour</span><span id="hud-lap" class="value">–</span></div>
+      </div>
+      <ol id="leaderboard" class="panel"></ol>
+    </div>
+    <div class="hud-top-right">
+      <div class="panel times">
+        <div><span class="label">Tour actuel</span><span id="hud-cur">0:00.000</span></div>
+        <div><span class="label">Dernier</span><span id="hud-last">–</span></div>
+        <div><span class="label">Meilleur</span><span id="hud-best">–</span></div>
+      </div>
+      <canvas id="minimap" class="panel" width="360" height="360"></canvas>
+    </div>
+    <div class="hud-bottom">
+      <div class="panel speedo">
+        <span id="hud-gear" class="gear">N</span>
+        <span id="hud-speed" class="speed">0</span>
+        <span class="unit">km/h</span>
+      </div>
+    </div>
+    <div id="lights" class="hidden">
+      <div class="light"></div><div class="light"></div><div class="light"></div><div class="light"></div><div class="light"></div>
+    </div>
+    <div id="banner" class="hidden"></div>
+    <div id="toast"></div>
+    <div class="hud-buttons">
+      <button id="btn-mute" class="icon-btn" aria-label="Couper le son">🔊</button>
+      <button id="btn-pause" class="icon-btn" aria-label="Pause">⏸</button>
+    </div>
+  </div>
+
+  <!-- Commandes tactiles -->
+  <div id="touch" class="hidden">
+    <div class="touch-left">
+      <button data-key="left" aria-label="Gauche">◀</button>
+      <button data-key="right" aria-label="Droite">▶</button>
+    </div>
+    <div class="touch-right">
+      <button data-key="brake" class="brake" aria-label="Freiner">FREIN</button>
+      <button data-key="gas" class="gas" aria-label="Accélérer">GAZ</button>
+    </div>
+  </div>
+
+  <!-- Menu principal -->
+  <div id="menu" class="overlay">
+    <div class="menu-card">
+      <header class="title">
+        <div class="stripes"></div>
+        <h1>Grand Prix <span>des Îles</span></h1>
+        <p class="subtitle">Course de monoplaces en vue de dessus</p>
+      </header>
+
+      <section>
+        <h2>Circuit</h2>
+        <div id="track-list" class="track-list"></div>
+      </section>
+
+      <div class="row">
+        <section>
+          <h2>Tours</h2>
+          <div class="seg" id="laps-seg">
+            <button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="10">10</button>
+          </div>
+        </section>
+        <section>
+          <h2>Difficulté</h2>
+          <div class="seg" id="diff-seg">
+            <button data-v="facile">Facile</button><button data-v="normal">Normal</button><button data-v="difficile">Difficile</button>
+          </div>
+        </section>
+      </div>
+
+      <section>
+        <h2>Écurie</h2>
+        <div id="team-list" class="team-list"></div>
+      </section>
+
+      <section class="name-row">
+        <h2><label for="player-name">Pilote</label></h2>
+        <input id="player-name" maxlength="16" placeholder="Votre nom" autocomplete="off">
+      </section>
+
+      <button id="btn-start" class="primary">Démarrer la course</button>
+
+      <details class="help">
+        <summary>Commandes</summary>
+        <ul>
+          <li><kbd>↑</kbd> / <kbd>W</kbd> / <kbd>Z</kbd> : accélérer</li>
+          <li><kbd>↓</kbd> / <kbd>S</kbd> : freiner, marche arrière</li>
+          <li><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>Q</kbd> <kbd>D</kbd> : tourner</li>
+          <li><kbd>R</kbd> : se replacer sur la piste · <kbd>Échap</kbd> / <kbd>P</kbd> : pause · <kbd>M</kbd> : son</li>
+          <li>Manette : stick gauche, gâchettes RT / LT</li>
+          <li>Sur mobile : boutons à l'écran</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="pause" class="overlay hidden">
+    <div class="menu-card small">
+      <h2 class="overlay-title">Pause</h2>
+      <button id="btn-resume" class="primary">Reprendre</button>
+      <button id="btn-restart">Recommencer</button>
+      <button id="btn-quit">Menu principal</button>
+    </div>
+  </div>
+
+  <!-- Résultats -->
+  <div id="results" class="overlay hidden">
+    <div class="menu-card">
+      <h2 class="overlay-title" id="results-title">Résultats</h2>
+      <p id="results-sub" class="subtitle"></p>
+      <table class="results-table">
+        <thead><tr><th>Pos</th><th>Pilote</th><th>Écurie</th><th>Temps</th><th>Meilleur tour</th></tr></thead>
+        <tbody id="results-body"></tbody>
+      </table>
+      <div class="row buttons">
+        <button id="btn-again" class="primary">Rejouer</button>
+        <button id="btn-menu">Menu principal</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
