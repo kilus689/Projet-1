@@ -30,9 +30,12 @@
   // ---------- Physique ----------
   // Échelle : 1 px = 10 cm. Une voiture mesure 52 px (5,2 m).
   const PHYS = {
-    maxSpeed: 950, // px/s (≈ 342 km/h)
-    accel: 600,
-    brake: 1350,
+    // Valeurs calées sur une F1 2026 : 0-100 km/h ≈ 2 s, 0-200 ≈ 4,5 s, pointe ≈ 314 km/h
+    // (≈ 345 km/h avec batterie et aéro active), freinage ≈ 5,5 g à haute vitesse
+    maxSpeed: 975, // px/s
+    accel: 145,
+    accelExp: 3.2,
+    brake: 600,
     reverseMax: 220,
     steerRate: 2.7, // rad/s
     grip: 9,
@@ -46,7 +49,7 @@
   F1.WEATHER = {
     dry: { label: 'Sec', grip: 1, brake: 1, accel: 1, steer: 1, ai: 1 },
     cloudy: { label: 'Nuageux', grip: 1, brake: 1, accel: 1, steer: 1, ai: 1 },
-    rain: { label: 'Pluie', grip: 0.62, brake: 0.78, accel: 0.86, steer: 0.86, ai: 0.87 },
+    rain: { label: 'Pluie', grip: 0.62, brake: 0.78, accel: 0.86, steer: 0.86, ai: 0.84 },
   };
   // Pneus : adhérence relative et durée de vie (fraction de la distance de course avant usure complète)
   F1.TYRES = {
@@ -212,23 +215,8 @@
       }
       this.pts = pts;
 
-      // Profil de vitesse théorique (utilisé par l'IA)
-      const vc = new Float32Array(N);
-      const kSteer = (0.42 * PHYS.steerRate) / PHYS.maxSpeed;
-      for (let i = 0; i < N; i++) {
-        let kmax = 0;
-        for (let j = -6; j <= 6; j++) kmax = Math.max(kmax, Math.abs(this.k[(i + j + N) % N]));
-        vc[i] = Math.min(PHYS.maxSpeed, (PHYS.steerRate * 0.9) / (kmax + kSteer));
-      }
-      const vp = new Float32Array(vc);
-      const b = PHYS.brake * 0.75;
-      for (let pass = 0; pass < 3; pass++) {
-        for (let i = N - 1; i >= 0; i--) {
-          const nxt = vp[(i + 1) % N];
-          vp[i] = Math.min(vc[i], Math.sqrt(nxt * nxt + 2 * b * sp));
-        }
-      }
-      this.vp = vp;
+      // Profil de vitesse théorique (utilisé par l'IA) — dépend de l'adhérence du circuit
+      this.setGrip(def.gripK || 1);
 
       // Zones d'aéro active : lignes droites d'au moins 300 m
       this.aeroZone = new Uint8Array(N);
@@ -308,6 +296,32 @@
 
     cellKey(cx, cy) { return cx * 65536 + cy; }
 
+    // Adhérence du circuit (1 = référence) : recalcule le profil de vitesse de l'IA
+    setGrip(k) {
+      this.gripK = k;
+      const N = this.n, sp = this.spacing;
+      const vc = new Float32Array(N);
+      const sr = PHYS.steerRate * k;
+      const kSteer = (0.42 * sr) / PHYS.maxSpeed;
+      for (let i = 0; i < N; i++) {
+        let kmax = 0;
+        for (let j = -6; j <= 6; j++) kmax = Math.max(kmax, Math.abs(this.k[(i + j + N) % N]));
+        vc[i] = Math.min(PHYS.maxSpeed * 1.05, (sr * 0.9) / (kmax + kSteer));
+      }
+      const vp = new Float32Array(vc);
+      const b = PHYS.brake * 0.72;
+      for (let pass = 0; pass < 3; pass++) {
+        for (let i = N - 1; i >= 0; i--) {
+          const nxt = vp[(i + 1) % N];
+          // freinage plus faible à basse vitesse (même modèle que la voiture)
+          const bb = b * (0.45 + 0.55 * Math.min(1, nxt / PHYS.maxSpeed));
+          vp[i] = Math.min(vc[i], Math.sqrt(nxt * nxt + 2 * bb * sp));
+        }
+      }
+      this.vp = vp;
+      this._line = null;
+    }
+
     // ---------- Relief ----------
     elevation(def) {
       const N = this.n, pts = this.pts;
@@ -315,9 +329,11 @@
       this.slope = new Float32Array(N);
       const E = def.id && F1.ELEV && F1.ELEV[def.id] ? decodeElev(def.id) : null;
       this.dem = E;
+      // Échelle appliquée au tracé (longueur officielle) : les données d'altitude restent dans le repère d'origine
+      this.sf = def.scaleF || 1;
       if (!E) return;
       const raw = new Float32Array(N);
-      for (let i = 0; i < N; i++) raw[i] = demAt(E, pts[i].x, pts[i].y);
+      for (let i = 0; i < N; i++) raw[i] = demAt(E, this.unscale(pts[i].x), this.unscale(pts[i].y));
       // 1) Niveau du sol : 20e centile sur ±60 m (élimine immeubles, ponts, arbres)
       const W = 60, low = new Float32Array(N), win = new Float32Array(2 * W + 1);
       for (let i = 0; i < N; i += 4) {
@@ -397,9 +413,11 @@
     }
 
     // Altitude du terrain (mètres) en un point du jeu, avec la même correction que la piste
+    unscale(v) { return 3000 + (v - 3000) / (this.sf || 1); }
+
     groundAt(x, y) {
       if (!this.dem) return 0;
-      const v = demAt(this.dem, x, y);
+      const v = demAt(this.dem, this.unscale(x), this.unscale(y));
       return this.meanH + (v - this.meanH) * this.reliefScale;
     }
 
@@ -476,7 +494,16 @@
         const rot = pts.slice(best + 1).concat(pts.slice(0, best + 1)).filter((p, i, arr) => i === 0 || Math.hypot(p[0] - arr[i - 1][0], p[1] - arr[i - 1][1]) > 30);
         poly = [].concat(...rot);
       }
-      trackCache.set(gp.id, new Track(Object.assign({}, gp, { poly, name: gp.circuit })));
+      let tr = new Track(Object.assign({}, gp, { poly, name: gp.circuit }));
+      // Mise à l'échelle sur la longueur officielle du circuit
+      if (gp.length) {
+        const f = (gp.length * 10) / tr.length;
+        if (Math.abs(f - 1) > 0.0015) {
+          poly = poly.map((v) => Math.round(v * f));
+          tr = new Track(Object.assign({}, gp, { poly, name: gp.circuit, scaleF: f }));
+        }
+      }
+      trackCache.set(gp.id, tr);
     }
     return trackCache.get(gp.id);
   };
@@ -539,7 +566,7 @@
       const absF = Math.abs(vF);
       const low = Math.min(1, absF / 160);
       const high = 1 - 0.42 * Math.min(1, absF / P.maxSpeed);
-      this.a += this.steer * P.steerRate * C.steer * (aero ? 0.82 : 1) * low * high * Math.sign(vF) * (this.offTrack ? 0.8 : 1) * dt;
+      this.a += this.steer * P.steerRate * (track.gripK || 1) * C.steer * (aero ? 0.82 : 1) * low * high * Math.sign(vF) * (this.offTrack ? 0.8 : 1) * dt;
       this.a = wrapAngle(this.a);
 
       fx = Math.cos(this.a); fy = Math.sin(this.a);
@@ -562,10 +589,11 @@
       if (inp.throttle > 0 && vF < 0) vF = Math.min(0, vF + P.brake * inp.throttle * dt);
       if (inp.throttle > 0 && vF > -10) {
         const r = Math.max(0, vF / maxS);
-        vF += P.accel * pw * C.accel * inp.throttle * Math.max(0, 1 - Math.pow(r, 1.7)) * dt;
+        vF += P.accel * pw * C.accel * inp.throttle * Math.max(0, 1 - Math.pow(r, P.accelExp)) * dt;
       }
       if (inp.brake > 0) {
-        if (vF > 5) vF = Math.max(0, vF - P.brake * C.brake * inp.brake * dt);
+        // Freinage plus fort à haute vitesse (appui aérodynamique)
+        if (vF > 5) vF = Math.max(0, vF - P.brake * C.brake * inp.brake * (0.45 + 0.55 * Math.min(1, vF / P.maxSpeed)) * dt);
         else vF = Math.max(-P.reverseMax, vF - P.accel * 0.45 * inp.brake * dt);
       }
       vF -= vF * P.drag * (1 - 0.35 * aero) * dt;
@@ -714,7 +742,8 @@
   // Temps au tour de référence (IA parfaite, voiture au maximum) — mis en cache
   const refCache = new Map();
   F1.refLapTime = function (track) {
-    if (refCache.has(track.id)) return refCache.get(track.id);
+    const key = track.id + ':' + track.gripK;
+    if (refCache.has(key)) return refCache.get(key);
     const car = new Car({ skill: 1, power: 1 });
     const s0 = -2000;
     car.placeOnTrack(track, s0, 0, track.vp[track.idxAt(s0)] * 0.9);
@@ -728,7 +757,7 @@
       else if (start >= 0 && car.wrap > startWrap + 1) { res = t - start; break; }
     }
     if (!res) res = track.length / 600;
-    refCache.set(track.id, res);
+    refCache.set(key, res);
     return res;
   };
 
@@ -896,7 +925,13 @@
           const dist = Math.max(0, (pit.stopD - pit.d) * tr.spacing);
           target = Math.min(Math.sqrt(VL * VL + 2 * 1100 * toLimit), Math.sqrt(2 * 900 * dist) + 4);
         }
-        if (pit.phase === 'out' && pit.d > P.z + 30) target = 600; // bretelle de sortie : on reprend de la vitesse
+        // Bretelle de sortie : on reprend de la vitesse, sans dépasser ce que permet le virage suivant
+        if (pit.phase === 'out' && pit.d > P.z + 30) {
+          const N = tr.n, ahead = Math.floor(pit.d);
+          let lim = 600;
+          for (let j = 0; j <= 60; j += 5) lim = Math.min(lim, tr.vp[(((ahead + j) % N) + N) % N]);
+          target = lim;
+        }
         pit.v = pit.v > target ? Math.max(target, pit.v - 1300 * dt) : Math.min(target, pit.v + 500 * dt);
         pit.d += (pit.v * dt) / tr.spacing;
         if (pit.phase === 'in' && pit.d >= pit.stopD - 0.05) {

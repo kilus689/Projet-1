@@ -230,6 +230,7 @@
     show(card('Réglages de la course',
       backBtn(quickDriver, 'Pilotes'), stepper(3),
       h('p', { class: 'summary' }, `${gp.flag} ${gp.gp} · ${t.name} · ${d.flag} ${d.first} ${d.last} (#${d.num})`),
+      h('p', { class: 'pole-ref' }, `⏱ ${F1.Settings.poleText(gp)}`),
       ...settingsPanel(quickSettings, { weather: true, difficulty: true }),
       h('div', { class: 'row' },
         h('section', null, h('h3', null, 'Distance'), seg(F1.RACE_LENGTHS.map((r) => [r.id, r.id.length <= 1 ? r.label : `${r.label} (${r.laps(gp)} t.)`]), qs.length, (v) => { qs.length = v; saveQs(); quickSettings(); })),
@@ -574,6 +575,7 @@
           h('div', { class: 'gp-big' }, `${gp.flag} ${gp.gp}`),
           h('div', { class: 'subtitle' }, `${gp.circuit} · ${gp.place} · ${(track.length / 10000).toFixed(3)} km · ${gp.laps} tours`),
           h('div', { class: 'forecast' }, `Météo prévue : ${F1.Settings.WEATHER_CHOICES[wx]}`),
+          h('div', { class: 'pole-ref' }, `⏱ ${F1.Settings.poleText(gp)}`),
           h('button', { class: 'small-btn', onclick: () => settingsScreen(() => hub(c, 'weekend')) }, '⚙️ Aides et commandes')),
         trackCanvas(gp, 260, 170, team.color)),
       pickDriver, qualiBox, raceBox);

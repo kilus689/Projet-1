@@ -158,7 +158,7 @@
     for (const d of C.grid(c)) {
       const t = C.team(c, d.team);
       const p = C.perf01(t, d);
-      times[d.id] = ref * diff.quali * (1.02 + (1 - p) * 0.045 + gauss(r) * 0.0035);
+      times[d.id] = ref * diff.quali * (1.004 + (1 - p) * 0.045 + gauss(r) * 0.0035);
     }
     if (playerTime != null) times[c.playerDriver] = playerTime;
     const order = Object.keys(times).sort((a, b) => times[a] - times[b]);

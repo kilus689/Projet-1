@@ -631,7 +631,10 @@
     body.className = 'dialog-body';
     const best = bestAttempt();
     const prov = o.provisional ? o.provisional(best) : null;
-    body.innerHTML = `<p class="big-time">${fmt(time)}</p><p class="subtitle">Meilleur temps : ${fmt(best)}${prov ? ` · Position provisoire : <b>P${prov}</b>` : ''}</p>`;
+    const ref = F1.Settings.poleRef(o.gp);
+    const delta = ref ? best - ref : null;
+    body.innerHTML = `<p class="big-time">${fmt(time)}</p><p class="subtitle">Meilleur temps : ${fmt(best)}${prov ? ` · Position provisoire : <b>P${prov}</b>` : ''}</p>` +
+      (ref ? `<p class="subtitle">⏱ ${F1.Settings.poleText(o.gp)}<br>Écart avec la pole réelle : <b>${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(3)} s</b></p>` : '');
     const btns = [];
     if (S.attempts.length < (o.maxAttempts || 3)) btns.push([`Nouvelle tentative (${S.attempts.length}/${o.maxAttempts || 3})`, '', () => newRun()]);
     btns.push(['Valider ce temps', 'primary', () => finish({ time: best })]);
