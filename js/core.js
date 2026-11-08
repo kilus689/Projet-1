@@ -65,6 +65,48 @@
     }
   }
 
+  // ---------- Altitude (grille issue de js/data/elevation.js) ----------
+  const demCache = new Map();
+  function decodeElev(id) {
+    if (demCache.has(id)) return demCache.get(id);
+    const e = F1.ELEV[id];
+    let bytes;
+    if (typeof atob === 'function') {
+      const bin = atob(e.data);
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } else bytes = new Uint8Array(Buffer.from(e.data, 'base64'));
+    const n = e.nx * e.ny;
+    let v = new Float32Array(n);
+    for (let i = 0; i < n; i++) v[i] = e.base + (bytes[i * 2] | (bytes[i * 2 + 1] << 8)) / 10;
+    // Léger flou pour adoucir le bruit des données
+    for (let pass = 0; pass < 2; pass++) {
+      const o = new Float32Array(n);
+      for (let y = 0; y < e.ny; y++) for (let x = 0; x < e.nx; x++) {
+        let acc = 0, c = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= e.nx || yy >= e.ny) continue;
+          acc += v[yy * e.nx + xx]; c++;
+        }
+        o[y * e.nx + x] = acc / c;
+      }
+      v = o;
+    }
+    // Les tracés sont décalés de +3000 par Track (voir plus bas)
+    const E = { ox: e.x0 + 3000, oy: e.y0 + 3000, sp: e.sp, nx: e.nx, ny: e.ny, v };
+    demCache.set(id, E);
+    return E;
+  }
+  function demAt(E, x, y) {
+    let fx = (x - E.ox) / E.sp, fy = (y - E.oy) / E.sp;
+    fx = Math.max(0, Math.min(E.nx - 1.001, fx));
+    fy = Math.max(0, Math.min(E.ny - 1.001, fy));
+    const ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+    const v = E.v, w = E.nx;
+    return (v[iy * w + ix] * (1 - tx) + v[iy * w + ix + 1] * tx) * (1 - ty) + (v[(iy + 1) * w + ix] * (1 - tx) + v[(iy + 1) * w + ix + 1] * tx) * ty;
+  }
+
   class Track {
     constructor(def) {
       this.def = def;
@@ -187,9 +229,91 @@
         if (!arr) this.grid.set(key, (arr = []));
         arr.push(i);
       }
+
+      // Relief réel (altitude en mètres le long du tracé, pente)
+      this.elevation(def);
     }
 
     cellKey(cx, cy) { return cx * 65536 + cy; }
+
+    // ---------- Relief ----------
+    elevation(def) {
+      const N = this.n, pts = this.pts;
+      this.h = new Float32Array(N);
+      this.slope = new Float32Array(N);
+      const E = def.id && F1.ELEV && F1.ELEV[def.id] ? decodeElev(def.id) : null;
+      this.dem = E;
+      if (!E) return;
+      const raw = new Float32Array(N);
+      for (let i = 0; i < N; i++) raw[i] = demAt(E, pts[i].x, pts[i].y);
+      // 1) Niveau du sol : 20e centile sur ±60 m (élimine immeubles, ponts, arbres)
+      const W = 60, low = new Float32Array(N), win = new Float32Array(2 * W + 1);
+      for (let i = 0; i < N; i += 4) {
+        for (let j = -W; j <= W; j++) win[j + W] = raw[(i + j + N) % N];
+        win.sort();
+        const v = win[Math.floor(win.length * 0.2)];
+        for (let k = 0; k < 4 && i + k < N; k++) low[i + k] = v;
+      }
+      // 2) Lissage (trois moyennes glissantes ≈ gaussienne de 25 m)
+      let s = low;
+      for (let pass = 0; pass < 3; pass++) {
+        const o = new Float32Array(N);
+        let acc = 0;
+        const R = 25;
+        for (let j = -R; j <= R; j++) acc += s[(j + N) % N];
+        for (let i = 0; i < N; i++) {
+          o[i] = acc / (2 * R + 1);
+          acc += s[(i + R + 1) % N] - s[(i - R + N) % N];
+        }
+        s = o;
+      }
+      // 3) Pente limitée à 16 % (la plus forte du calendrier est d'environ 18 %)
+      const g = 0.16 * (this.spacing / 10);
+      for (let pass = 0; pass < 4; pass++) {
+        for (let i = 1; i < 2 * N; i++) { const a = i % N, b = (i - 1) % N; s[a] = Math.min(Math.max(s[a], s[b] - g), s[b] + g); }
+        for (let i = 2 * N; i > 0; i--) { const a = i % N, b = (i + 1) % N; s[a] = Math.min(Math.max(s[a], s[b] - g), s[b] + g); }
+      }
+      // 4) Correction des circuits où les données sont faussées (voir season2026.js)
+      let mean = 0;
+      for (let i = 0; i < N; i++) mean += s[i];
+      mean /= N;
+      this.meanH = mean;
+      this.reliefScale = def.relief != null ? def.relief : 1;
+      for (let i = 0; i < N; i++) this.h[i] = mean + (s[i] - mean) * this.reliefScale;
+      // 5) Pont : quand le tracé se croise (Suzuka), la portion la plus tardive passe dessus
+      this.bridges = [];
+      for (let i = 0; i < N; i += 3) {
+        const p = pts[i];
+        const cx = Math.floor(p.x / this.cell), cy = Math.floor(p.y / this.cell);
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+          const arr = this.grid.get(this.cellKey(cx + a, cy + b));
+          if (!arr) continue;
+          for (const j of arr) {
+            if (j <= i + 300 || N - (j - i) <= 300) continue;
+            if ((pts[j].x - p.x) ** 2 + (pts[j].y - p.y) ** 2 > (this.half * 0.6) ** 2) continue;
+            if (this.bridges.some((br) => Math.abs(br.j - j) < 200)) continue;
+            this.bridges.push({ i, j });
+          }
+        }
+      }
+      for (const br of this.bridges) {
+        const need = this.h[br.i] + 7.5 - this.h[br.j];
+        if (need <= 0) continue;
+        const R = 170;
+        for (let d = -R; d <= R; d++) {
+          const w = Math.cos((d / R) * Math.PI / 2) ** 2;
+          this.h[(br.j + d + N) % N] += need * w;
+        }
+      }
+      for (let i = 0; i < N; i++) this.slope[i] = (this.h[(i + 3) % N] - this.h[(i - 3 + N) % N]) / (6 * this.spacing / 10);
+    }
+
+    // Altitude du terrain (mètres) en un point du jeu, avec la même correction que la piste
+    groundAt(x, y) {
+      if (!this.dem) return 0;
+      const v = demAt(this.dem, x, y);
+      return this.meanH + (v - this.meanH) * this.reliefScale;
+    }
 
     // Distance au tracé (précise jusqu'à ~500 px, sinon renvoie une grande valeur)
     distTo(x, y) {
@@ -318,6 +442,11 @@
         vF = Math.abs(vF) < roll ? 0 : vF - Math.sign(vF) * roll;
       }
       if (this.offTrack && Math.abs(vF) > maxS) vF -= (vF - Math.sign(vF) * maxS) * 2.2 * dt;
+      // Gravité : on ralentit en montée, on accélère en descente (g = 98,1 unités/s²)
+      if (track.slope) {
+        const p = track.pts[this.idx];
+        vF -= 98.1 * track.slope[this.idx] * (fx * p.tx + fy * p.ty) * dt;
+      }
 
       this.skid = Math.abs(vR);
       vR *= Math.exp(-P.grip * (this.offTrack ? 0.55 : 1) * dt);

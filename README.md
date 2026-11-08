@@ -22,6 +22,11 @@ python3 -m http.server 8000
   Échelle réelle : 1 px = 10 cm, longueurs à ±1 % des longueurs officielles.
 - **11 écuries et 22 pilotes 2026** (numéros de l'engagement officiel), plus 8 pilotes libres fictifs.
 - Décor selon le circuit : parc, circuit permanent, désert ou circuit urbain (murs, immeubles).
+- **Relief réel** : altitude issue de données ouvertes (Terrain Tiles), filtrée pour garder le
+  niveau du sol et limiter la pente à 16 %. Dénivelés : Spa 104 m, Autriche 60 m, Monaco 50 m,
+  Suzuka 43 m (avec le pont du croisement), Interlagos 41 m… La gravité agit sur les voitures
+  (ralentissement en montée, accélération en descente). Le relief de Singapour est réduit car
+  les données y sont faussées par les immeubles.
 
 ## Modes de jeu
 
