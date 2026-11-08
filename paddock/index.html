@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0f14">
+  <title>Paddock 2026</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Paddock 26">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- Interface de course -->
+  <div id="hud" class="hidden">
+    <div class="hud-top-left">
+      <div class="panel big-stats">
+        <div><span class="label" id="hud-pos-label">Position</span><span id="hud-pos" class="value">–</span></div>
+        <div><span class="label" id="hud-lap-label">Tour</span><span id="hud-lap" class="value">–</span></div>
+      </div>
+      <ol id="leaderboard" class="panel"></ol>
+    </div>
+    <div class="hud-top-right">
+      <div class="panel times">
+        <div><span class="label">Tour actuel</span><span id="hud-cur">0:00.000</span></div>
+        <div><span class="label">Dernier</span><span id="hud-last">–</span></div>
+        <div><span class="label">Meilleur</span><span id="hud-best">–</span></div>
+      </div>
+      <canvas id="minimap" class="panel" width="360" height="360"></canvas>
+    </div>
+    <div class="hud-bottom">
+      <div class="panel speedo">
+        <span id="hud-gear" class="gear">N</span>
+        <span id="hud-speed" class="speed">0</span>
+        <span class="unit">km/h</span>
+      </div>
+    </div>
+    <div id="lights" class="hidden">
+      <div class="light"></div><div class="light"></div><div class="light"></div><div class="light"></div><div class="light"></div>
+    </div>
+    <div id="banner" class="hidden"></div>
+    <div id="toast"></div>
+    <div class="hud-buttons">
+      <button id="btn-mute" class="icon-btn" aria-label="Couper le son">🔊</button>
+      <button id="btn-pause" class="icon-btn" aria-label="Pause">⏸</button>
+    </div>
+  </div>
+
+  <!-- Commandes tactiles -->
+  <div id="touch" class="hidden">
+    <div class="touch-left">
+      <button data-key="left" aria-label="Gauche">◀</button>
+      <button data-key="right" aria-label="Droite">▶</button>
+    </div>
+    <div class="touch-right">
+      <button data-key="brake" class="brake" aria-label="Freiner">FREIN</button>
+      <button data-key="gas" class="gas" aria-label="Accélérer">GAZ</button>
+    </div>
+  </div>
+
+  <!-- Menus (générés par js/ui.js) -->
+  <div id="screen" class="overlay"></div>
+  <!-- Fenêtres pendant une séance (pause, résultats) -->
+  <div id="dialog" class="overlay hidden"></div>
+
+  <script src="js/data/circuits.js"></script>
+  <script src="js/data/season2026.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/career.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/session.js"></script>
+  <script src="js/ui.js"></script>
+  <script>
+    // Mode hors ligne (uniquement quand le jeu est servi en https ou en local)
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      try { navigator.serviceWorker.register('sw.js').catch(function () {}); } catch (e) { /* non disponible ici */ }
+    }
+  </script>
+</body>
+</html>
