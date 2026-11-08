@@ -115,7 +115,10 @@
       h('span', { class: 'hb-sub' }, 'Mode pilote ou mode écurie, 24 Grands Prix')));
     items.push(h('button', { class: 'home-btn', onclick: quickRace },
       h('span', { class: 'hb-title' }, 'Course rapide'),
-      h('span', { class: 'hb-sub' }, 'Un circuit, un pilote, c\'est parti')));
+      h('span', { class: 'hb-sub' }, 'Circuit, écurie, pilote, météo et aides')));
+    items.push(h('button', { class: 'home-btn', onclick: () => settingsScreen(home) },
+      h('span', { class: 'hb-title' }, 'Aides et commandes'),
+      h('span', { class: 'hb-sub' }, 'Sensibilité, aides au pilotage, aéro active')));
 
     show(h('div', { class: 'menu-card home' },
       h('header', { class: 'title' },
@@ -140,34 +143,104 @@
       h('span', null, 'Touchez le bouton Partager ', h('span', { class: 'share-ico' }, '⬆︎'), ' de Safari, puis « Sur l\'écran d\'accueil ». Le jeu s\'ouvrira en plein écran, même hors connexion.'));
   }
 
-  // ---------- Course rapide ----------
-  const qs = Object.assign({ gp: 'au-1953', driver: 'lec', length: '3', difficulty: 'normal', quali: 'sim' }, store.get('quick', {}));
+  // ---------- Course rapide : circuit → écurie → pilote → réglages ----------
+  const qs = Object.assign({ gp: 'au-1953', team: 'ferrari', driver: 'lec', length: '3', quali: 'sim' }, store.get('quick', {}));
+  const saveQs = () => store.set('quick', qs);
+
+  function stepper(n) {
+    const labels = ['Circuit', 'Écurie', 'Pilote', 'Réglages'];
+    return h('div', { class: 'stepper' }, labels.map((l, i) => h('span', { class: i === n ? 'on' : i < n ? 'done' : '' }, `${i + 1}. ${l}`)));
+  }
+
   function quickRace() {
-    const save = () => store.set('quick', qs);
-    const gpGrid = h('div', { class: 'gp-grid' });
+    const list = h('div', { class: 'circuit-list' });
     F1.CALENDAR.forEach((gp, i) => {
-      gpGrid.appendChild(h('button', { class: 'gp-card' + (gp.id === qs.gp ? ' selected' : ''), onclick: () => { qs.gp = gp.id; save(); quickRace(); } },
-        trackCanvas(gp, 120, 80),
-        h('span', { class: 'gp-name' }, `${gp.flag} ${gp.place}`),
-        h('span', { class: 'gp-meta' }, `Manche ${i + 1}`)));
+      const track = F1.getTrack(gp);
+      list.appendChild(h('button', { class: 'circuit-row' + (gp.id === qs.gp ? ' selected' : ''), onclick: () => { qs.gp = gp.id; saveQs(); quickTeam(); } },
+        h('span', { class: 'cr-flag' }, gp.flag),
+        h('span', { class: 'cr-body' },
+          h('span', { class: 'cr-name' }, gp.gp.replace('Grand Prix ', 'GP ')),
+          h('span', { class: 'cr-meta' }, `${gp.circuit} · ${gp.place} · ${(track.length / 10000).toFixed(3)} km · ${gp.laps} tours`)),
+        h('span', { class: 'cr-round' }, `${i + 1}`),
+        trackCanvas(gp, 90, 60)));
     });
-    const drivers = F1.DRIVERS2026;
-    const gp = F1.CALENDAR.find((g) => g.id === qs.gp);
-    show(card('Course rapide',
-      backBtn(home),
-      h('section', null, h('h3', null, 'Circuit'), gpGrid),
-      h('section', null, h('h3', null, 'Pilote'), driverGrid(drivers, teamById, qs.driver, (id) => { qs.driver = id; save(); quickRace(); })),
+    show(card('Course rapide', backBtn(home), stepper(0), h('h3', null, 'Choisissez le circuit'), list));
+  }
+
+  function quickTeam() {
+    const g = h('div', { class: 'team-grid' });
+    for (const t of F1.TEAMS2026) {
+      g.appendChild(teamCard(t, {
+        selected: t.id === qs.team,
+        drivers: F1.DRIVERS2026.filter((d) => d.team === t.id),
+        onclick: () => { qs.team = t.id; saveQs(); quickDriver(); },
+      }));
+    }
+    const gp = F1.CALENDAR.find((x) => x.id === qs.gp);
+    show(card(`${gp.flag} ${gp.gp}`, backBtn(quickRace, 'Circuits'), stepper(1), h('h3', null, 'Choisissez votre écurie'), g));
+  }
+
+  function quickDriver() {
+    const t = teamById(qs.team);
+    const g = h('div', { class: 'driver-pick' });
+    for (const d of F1.DRIVERS2026.filter((x) => x.team === t.id)) {
+      g.appendChild(h('button', { class: 'driver-big' + (d.id === qs.driver ? ' selected' : ''), style: `--team:${t.color}`, onclick: () => { qs.driver = d.id; saveQs(); quickSettings(); } },
+        h('span', { class: 'db-num' }, String(d.num)),
+        h('span', { class: 'db-flag' }, d.flag),
+        h('span', { class: 'db-first' }, d.first),
+        h('span', { class: 'db-last' }, d.last.toUpperCase()),
+        h('span', { class: 'db-meta' }, `Vitesse ${d.pace} · Course ${d.craft}`)));
+    }
+    show(card(t.name, backBtn(quickTeam, 'Écuries'), stepper(2), h('h3', null, 'Choisissez votre pilote'), carCanvas(t, 160, 100), g));
+  }
+
+  // Bloc de réglages partagé (course rapide, carrière, accueil)
+  function settingsPanel(rerender, opts) {
+    const S = F1.Settings, st = S.get();
+    const toggle = (key, label, desc) => h('button', { class: 'toggle' + (st.assists[key] ? ' on' : ''), onclick: () => { S.set({ assists: { [key]: !st.assists[key] } }); rerender(); } },
+      h('span', { class: 'tg-label' }, label), h('span', { class: 'tg-desc' }, desc), h('span', { class: 'tg-state' }, st.assists[key] ? 'Activé' : 'Désactivé'));
+    const parts = [];
+    if (opts && opts.weather) {
+      parts.push(h('section', null, h('h3', null, 'Météo'), seg(Object.entries(S.WEATHER_CHOICES), st.weather, (v) => { S.set({ weather: v }); rerender(); })));
+    }
+    if (opts && opts.difficulty) {
+      parts.push(h('section', null, h('h3', null, 'Difficulté de l\'IA'), seg(Object.entries(F1.DIFFICULTIES).map(([k, v]) => [k, v.label]), st.difficulty, (v) => { S.set({ difficulty: v }); rerender(); })));
+    }
+    parts.push(h('section', null, h('h3', null, 'Aides au pilotage'),
+      h('div', { class: 'toggles' },
+        toggle('brake', 'Freinage assisté', 'Freine automatiquement avant les virages'),
+        toggle('tc', 'Antipatinage / stabilité', 'Limite les dérapages et le patinage'),
+        toggle('steer', 'Direction assistée', 'Aide à suivre la trajectoire'),
+        toggle('line', 'Trajectoire idéale', 'Ligne verte, rouge aux freinages'))));
+    parts.push(h('div', { class: 'row' },
+      h('section', null, h('h3', null, 'Sensibilité de la direction'), seg(Object.entries(S.SENS).map(([k, v]) => [k, v.label]), st.sens, (v) => { S.set({ sens: v }); rerender(); })),
+      h('section', null, h('h3', null, 'Aéro active'), seg(Object.entries(S.AERO), st.aero, (v) => { S.set({ aero: v }); rerender(); }))));
+    parts.push(h('p', { class: 'hint' }, 'Batterie : elle se vide en accélérant et se recharge au freinage. ⚡ / touche E : boost (plus de puissance, vide la batterie plus vite). Aéro active manuelle : bouton AÉRO / Espace dans les lignes droites ; elle se referme au freinage.'));
+    return parts;
+  }
+
+  function quickSettings() {
+    const gp = F1.CALENDAR.find((x) => x.id === qs.gp);
+    const d = F1.DRIVERS2026.find((x) => x.id === qs.driver);
+    const t = teamById(qs.team);
+    show(card('Réglages de la course',
+      backBtn(quickDriver, 'Pilotes'), stepper(3),
+      h('p', { class: 'summary' }, `${gp.flag} ${gp.gp} · ${t.name} · ${d.flag} ${d.first} ${d.last} (#${d.num})`),
+      ...settingsPanel(quickSettings, { weather: true, difficulty: true }),
       h('div', { class: 'row' },
-        h('section', null, h('h3', null, 'Distance'), seg(F1.RACE_LENGTHS.map((r) => [r.id, r.id.length <= 1 ? r.label : `${r.label} (${r.laps(gp)} t.)`]), qs.length, (v) => { qs.length = v; save(); quickRace(); })),
-        h('section', null, h('h3', null, 'Difficulté'), seg(Object.entries(F1.DIFFICULTIES).map(([k, v]) => [k, v.label]), qs.difficulty, (v) => { qs.difficulty = v; save(); quickRace(); })),
-        h('section', null, h('h3', null, 'Qualifications'), seg([['sim', 'Simulées'], ['play', 'Jouées']], qs.quali, (v) => { qs.quali = v; save(); quickRace(); }))),
-      h('button', { class: 'primary big', onclick: startQuick }, `Départ : ${gp.gp}`)));
+        h('section', null, h('h3', null, 'Distance'), seg(F1.RACE_LENGTHS.map((r) => [r.id, r.id.length <= 1 ? r.label : `${r.label} (${r.laps(gp)} t.)`]), qs.length, (v) => { qs.length = v; saveQs(); quickSettings(); })),
+        h('section', null, h('h3', null, 'Qualifications'), seg([['sim', 'Simulées'], ['play', 'Jouées']], qs.quali, (v) => { qs.quali = v; saveQs(); quickSettings(); }))),
+      h('button', { class: 'primary big', onclick: startQuick }, 'Départ')));
+  }
+
+  function settingsScreen(back) {
+    show(card('Aides et commandes', backBtn(back), ...settingsPanel(() => settingsScreen(back), {})));
   }
 
   function quickCareer() {
     // Une « carrière » temporaire non sauvegardée sert de base aux calculs
     const c = {
-      difficulty: qs.difficulty, raceLength: qs.length, season: 2026, round: F1.CALENDAR.findIndex((g) => g.id === qs.gp), seed: (Math.random() * 1e9) | 0,
+      difficulty: F1.Settings.get().difficulty, raceLength: qs.length, season: 2026, round: F1.CALENDAR.findIndex((g) => g.id === qs.gp), seed: (Math.random() * 1e9) | 0,
       teams: JSON.parse(JSON.stringify(F1.TEAMS2026)), drivers: JSON.parse(JSON.stringify(F1.DRIVERS2026)), playerDriver: qs.driver,
     };
     return c;
@@ -176,17 +249,19 @@
   function startQuick() {
     const c = quickCareer();
     const gp = F1.CALENDAR[c.round];
+    let weather = F1.Settings.get().weather;
+    if (weather === 'random') weather = F1.Settings.rollWeather(gp.id);
     const go = (playerTime) => {
       const q = C.simQuali(c, gp, playerTime);
       F1.Session.start({
         gp, mode: 'race', laps: C.lapsFor(c, gp), entries: C.entries(c, q.order, c.playerDriver), allowRestart: true,
-        title: gp.gp,
-        onEnd: (res) => { if (!res) return quickRace(); showRaceResults(c, gp, res, quickRace, q); },
+        title: gp.gp, weather,
+        onEnd: (res) => { if (!res) return quickSettings(); showRaceResults(c, gp, res, quickSettings, q); },
       });
     };
     if (qs.quali === 'play') {
       F1.Session.start({
-        gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver),
+        gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver), weather,
         provisional: (t) => C.simQuali(c, gp, t).order.indexOf(c.playerDriver) + 1,
         onEnd: (res) => go(res && res.time != null ? res.time : 9999),
       });
@@ -447,8 +522,21 @@
       body));
   }
 
+  // Météo prévue pour la manche en cours (tirée une fois, selon le climat du circuit)
+  function weatherFor(c) {
+    c.wx = c.wx || {};
+    const key = c.season + '-' + c.round;
+    if (!c.wx[key]) {
+      const r = F1.util.rng((c.seed || 1) + c.round * 7919 + c.season * 31);
+      c.wx[key] = F1.Settings.rollWeather(C.gp(c).id, r);
+      C.save(c);
+    }
+    return c.wx[key];
+  }
+
   function tabWeekend(c) {
     const gp = C.gp(c);
+    const wx = weatherFor(c);
     const track = F1.getTrack(gp);
     const laps = C.lapsFor(c, gp);
     const wk = c.weekend;
@@ -478,7 +566,9 @@
       h('div', { class: 'gp-head' },
         h('div', null,
           h('div', { class: 'gp-big' }, `${gp.flag} ${gp.gp}`),
-          h('div', { class: 'subtitle' }, `${gp.circuit} · ${gp.place} · ${(track.length / 10000).toFixed(3)} km · ${gp.laps} tours`)),
+          h('div', { class: 'subtitle' }, `${gp.circuit} · ${gp.place} · ${(track.length / 10000).toFixed(3)} km · ${gp.laps} tours`),
+          h('div', { class: 'forecast' }, `Météo prévue : ${F1.Settings.WEATHER_CHOICES[wx]}`),
+          h('button', { class: 'small-btn', onclick: () => settingsScreen(() => hub(c, 'weekend')) }, '⚙️ Aides et commandes')),
         trackCanvas(gp, 260, 170, team.color)),
       pickDriver, qualiBox, raceBox);
   }
@@ -491,7 +581,7 @@
   function playQuali(c) {
     const gp = C.gp(c);
     F1.Session.start({
-      gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver), maxAttempts: 3,
+      gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver), maxAttempts: 3, weather: weatherFor(c),
       provisional: (t) => C.simQuali(c, gp, t).order.indexOf(c.playerDriver) + 1,
       onEnd: (res) => {
         setQuali(c, C.simQuali(c, gp, res && res.time != null ? res.time : 9999));
@@ -532,14 +622,14 @@
     const gp = C.gp(c);
     const grid = c.weekend.quali.order;
     F1.Session.start({
-      gp, mode: 'race', laps: C.lapsFor(c, gp), entries: C.entries(c, grid, c.playerDriver), title: gp.gp,
+      gp, mode: 'race', laps: C.lapsFor(c, gp), entries: C.entries(c, grid, c.playerDriver), title: gp.gp, weather: weatherFor(c),
       onEnd: (res) => finishRace(c, gp, res),
     });
   }
 
   function simRace(c) {
     const gp = C.gp(c);
-    finishRace(c, gp, C.simRace(c, gp, c.weekend.quali.order));
+    finishRace(c, gp, C.simRace(c, gp, c.weekend.quali.order, weatherFor(c)));
   }
 
   function standingsTable(heads, rows) {

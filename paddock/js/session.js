@@ -16,12 +16,13 @@
 
   // ---------- Entrées ----------
   const keys = new Set();
-  const touch = { left: false, right: false, gas: false, brake: false };
+  const touch = { left: false, right: false, gas: false, brake: false, boost: false, aero: false };
   const KEYMAP = {
     ArrowUp: 'gas', KeyW: 'gas', KeyZ: 'gas',
     ArrowDown: 'brake', KeyS: 'brake',
     ArrowLeft: 'left', KeyA: 'left', KeyQ: 'left',
     ArrowRight: 'right', KeyD: 'right',
+    KeyE: 'boost', ShiftLeft: 'boost', ShiftRight: 'boost',
   };
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
@@ -31,6 +32,7 @@
     if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
     if (e.code === 'KeyM') toggleMute();
     if (e.code === 'KeyC') nextCamera();
+    if (e.code === 'Space' && S.state !== 'idle') { e.preventDefault(); toggleAero(); }
     if (e.code === 'KeyR' && S.state === 'run' && S.race.player && !S.race.player.finished) {
       S.race.player.resetOnTrack(S.race.track);
     }
@@ -38,33 +40,64 @@
   window.addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) keys.delete(k); });
   window.addEventListener('blur', () => keys.clear());
 
-  let padStart = false;
-  function readInput() {
-    let steer = 0, throttle = 0, brake = 0;
-    if (keys.has('left') || touch.left) steer -= 1;
-    if (keys.has('right') || touch.right) steer += 1;
+  let padStart = false, padAero = false;
+  let steerIn = 0; // direction lissée (clavier / tactile)
+  function toggleAero() {
+    const r = S.race;
+    if (!r || r.aeroMode !== 'manual' || !r.player) return;
+    S.aeroWanted = !S.aeroWanted;
+    if (S.aeroWanted && !r.track.aeroZone[r.player.idx]) { S.aeroWanted = false; toast('Aéro : hors zone', ''); }
+  }
+  function readInput(dt) {
+    const set = F1.Settings.get();
+    const sens = F1.Settings.SENS[set.sens] || F1.Settings.SENS.mid;
+    let target = 0, throttle = 0, brake = 0, analog = null;
+    if (keys.has('left') || touch.left) target -= 1;
+    if (keys.has('right') || touch.right) target += 1;
     if (keys.has('gas') || touch.gas) throttle = 1;
     if (keys.has('brake') || touch.brake) brake = 1;
+    let boost = keys.has('boost') || touch.boost;
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     for (const gp of pads) {
       if (!gp) continue;
       const ax = gp.axes[0] || 0;
-      if (Math.abs(ax) > 0.15) steer = Math.max(-1, Math.min(1, steer + ax));
+      // Courbe progressive : petits mouvements du stick = petites corrections
+      if (Math.abs(ax) > 0.12) analog = Math.sign(ax) * Math.pow((Math.abs(ax) - 0.12) / 0.88, sens.pad);
       const rt = gp.buttons[7] ? gp.buttons[7].value : 0;
       const lt = gp.buttons[6] ? gp.buttons[6].value : 0;
       throttle = Math.max(throttle, rt, gp.buttons[0] && gp.buttons[0].pressed ? 1 : 0);
       brake = Math.max(brake, lt, gp.buttons[1] && gp.buttons[1].pressed ? 1 : 0);
+      if (gp.buttons[5] && gp.buttons[5].pressed) boost = true;
+      const lb = !!(gp.buttons[4] && gp.buttons[4].pressed);
+      if (lb && !padAero) toggleAero();
+      padAero = lb;
       const st = !!(gp.buttons[9] && gp.buttons[9].pressed);
       if (st && !padStart) togglePause();
       padStart = st;
       break;
     }
-    return { steer, throttle, brake };
+    // Rampe de braquage : la direction s'oriente progressivement, et revient plus vite au centre
+    const rate = target === 0 || Math.sign(target) !== Math.sign(steerIn) ? sens.back : sens.rate;
+    const d = target - steerIn;
+    steerIn += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
+    let steer = analog != null ? analog : steerIn;
+    // Moins de braquage à haute vitesse
+    const p = S.race && S.race.player;
+    if (p) steer *= 1 - sens.highSpeedCut * Math.min(1, p.speed / F1.PHYS.maxSpeed);
+    // Aéro manuelle : se referme d'elle-même (freinage, fin de zone) et doit être réactivée
+    if (p && S.prevAero && !p.aeroOpen) S.aeroWanted = false;
+    if (p) S.prevAero = p.aeroOpen;
+    return { steer, throttle, brake, boost, aero: !!S.aeroWanted };
   }
 
   document.querySelectorAll('#touch button').forEach((btn) => {
     const k = btn.dataset.key;
-    const on = (e) => { e.preventDefault(); touch[k] = true; btn.classList.add('active'); try { btn.setPointerCapture(e.pointerId); } catch (_) { /* ignoré */ } };
+    const on = (e) => {
+      e.preventDefault();
+      if (k === 'aero') { toggleAero(); return; }
+      touch[k] = true; btn.classList.add('active');
+      try { btn.setPointerCapture(e.pointerId); } catch (_) { /* ignoré */ }
+    };
     const off = (e) => { e.preventDefault(); touch[k] = false; btn.classList.remove('active'); };
     btn.addEventListener('pointerdown', on);
     btn.addEventListener('pointerup', off);
@@ -139,7 +172,10 @@
   function newRun() {
     const o = S.opts;
     const track = F1.getTrack(o.gp);
-    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode });
+    const set = F1.Settings.get();
+    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists });
+    S.aeroWanted = false; S.prevAero = false; steerIn = 0;
+    $('touch-aero').classList.toggle('hidden', set.aero !== 'manual');
     S.scene2d = F1.buildScene(track);
     renderer.setScene(S.scene2d);
     renderer.snapCamera(S.race.player);
@@ -304,6 +340,15 @@
     $('hud-last').textContent = p.lapTimes.length ? fmt(p.lapTimes[p.lapTimes.length - 1]) : '–';
     $('hud-best').textContent = quali ? fmt(bestAttempt()) : fmt(p.bestLap);
     $('hud-speed').textContent = Math.round(p.speed * F1.KMH);
+    const bat = Math.round(p.battery * 100);
+    $('hud-batt-fill').style.width = bat + '%';
+    $('hud-batt-fill').className = p.boosting ? 'boost' : p.deploying ? 'deploy' : p.battery < 0.05 ? 'empty' : '';
+    $('hud-batt-val').textContent = bat + ' %';
+    const zone = race.track.aeroZone[p.idx] === 1;
+    const aeroEl = $('hud-aero');
+    aeroEl.textContent = p.aeroOpen ? 'AÉRO X' : 'AÉRO Z';
+    aeroEl.className = 'aero ' + (p.aeroOpen ? 'open' : zone && race.aeroMode === 'manual' ? 'ready' : '');
+    $('hud-boost').classList.toggle('on', !!p.boosting);
 
     if (!quali && (force || S.hudTimer <= 0)) {
       S.hudTimer = 0.3;
@@ -371,7 +416,7 @@
 
     if (dt > 0 && race) {
       acc += dt;
-      const input = S.state === 'run' ? readInput() : null;
+      const input = S.state === 'run' ? readInput(dt) : null;
       let steps = 0;
       while (acc >= STEP && steps < 8) {
         race.step(STEP, input);
@@ -433,7 +478,7 @@
       const cam = S.demo ? CAMERAS[0] : CAMERAS[camIdx];
       const use3d = cam.kind === '3d' && r3d && r3d.init();
       if (use3d) {
-        r3d.setTrack(race.track, S.scene2d);
+        r3d.setTrack(race.track, S.scene2d, race.weather);
         r3d.draw(race, focus, cam.id, S.state === 'paused' ? 0 : dt, { lights: S.state === 'countdown' ? S.lightsShown : 0 });
       } else {
         renderer.rotate = !!cam.rotate;

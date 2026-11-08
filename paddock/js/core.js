@@ -41,6 +41,15 @@
     radius: 19,
   };
   F1.PHYS = PHYS;
+
+  // Météo : multiplicateurs d'adhérence, de freinage, de motricité et de braquage
+  F1.WEATHER = {
+    dry: { label: 'Sec', grip: 1, brake: 1, accel: 1, steer: 1, ai: 1 },
+    cloudy: { label: 'Nuageux', grip: 1, brake: 1, accel: 1, steer: 1, ai: 1 },
+    rain: { label: 'Pluie', grip: 0.62, brake: 0.78, accel: 0.86, steer: 0.86, ai: 0.87 },
+  };
+  // Batterie (ERS 2026) : fractions de batterie par seconde
+  F1.ERS = { deploy: 0.03, boost: 0.085, harvestBrake: 0.12, harvestLift: 0.04, gain: 0.06, boostGain: 0.13, empty: -0.08 };
   F1.KMH = 0.36; // px/s -> km/h
 
   // ---------- Circuit ----------
@@ -213,6 +222,21 @@
       }
       this.vp = vp;
 
+      // Zones d'aéro active : lignes droites d'au moins 300 m
+      this.aeroZone = new Uint8Array(N);
+      this.aeroZones = [];
+      for (let i = 0; i < N;) {
+        if (Math.abs(this.k[i]) < 0.0007) {
+          let j = i;
+          while (j < i + N && Math.abs(this.k[j % N]) < 0.0007) j++;
+          if (j - i >= 300) {
+            this.aeroZones.push([i + 60, j - 30]);
+            for (let t = i + 60; t < j - 30; t++) this.aeroZone[t % N] = 1;
+          }
+          i = j + 1;
+        } else i++;
+      }
+
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const p of pts) {
         minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
@@ -308,6 +332,22 @@
       for (let i = 0; i < N; i++) this.slope[i] = (this.h[(i + 3) % N] - this.h[(i - 3 + N) % N]) / (6 * this.spacing / 10);
     }
 
+    // Trajectoire idéale : décalage latéral (corde des virages) et zones de freinage
+    racingLine() {
+      if (this._line) return this._line;
+      const N = this.n, half = this.half;
+      const lat = new Float32Array(N), brake = new Uint8Array(N);
+      for (let i = 0; i < N; i++) {
+        let acc = 0;
+        for (let j = -12; j <= 12; j++) acc += Math.max(-1, Math.min(1, this.k[(i + 10 + j + N) % N] * 900));
+        lat[i] = (acc / 25) * half * 0.55;
+        let mn = Infinity;
+        for (let j = 5; j <= 60; j += 5) mn = Math.min(mn, this.vp[(i + j) % N]);
+        brake[i] = this.vp[i] - mn > 60 ? 1 : 0;
+      }
+      return (this._line = { lat, brake });
+    }
+
     // Altitude du terrain (mètres) en un point du jeu, avec la même correction que la piste
     groundAt(x, y) {
       if (!this.dem) return 0;
@@ -384,6 +424,7 @@
         offTrack: false, skid: 0, wallHit: 0, alongTrack: 0,
         lane: 0, lanePref: 0, stuck: 0, wrongWay: 0,
         throttle: 0, brakeIn: 0, gap: 0,
+        battery: 0.85, aeroOpen: false, boosting: false, deploying: false,
       }, o);
     }
 
@@ -408,18 +449,25 @@
       this.stuck = 0;
     }
 
-    update(dt, inp, track) {
-      const P = PHYS;
+    update(dt, inp, track, cond) {
+      const P = PHYS, E = F1.ERS;
+      const C = cond || F1.WEATHER.dry;
       this.steer += (inp.steer - this.steer) * Math.min(1, dt * 10);
       this.throttle = inp.throttle;
       this.brakeIn = inp.brake;
+
+      // Aéro active : seulement dans une zone, refermée au freinage
+      const zone = track.aeroZone ? track.aeroZone[this.idx] : 0;
+      if (!zone || inp.brake > 0.1 || C.aero === 'off') this.aeroOpen = false;
+      else if (inp.aero != null) this.aeroOpen = !!inp.aero;
+      const aero = this.aeroOpen ? 1 : 0;
 
       let fx = Math.cos(this.a), fy = Math.sin(this.a);
       let vF = this.vx * fx + this.vy * fy;
       const absF = Math.abs(vF);
       const low = Math.min(1, absF / 160);
       const high = 1 - 0.42 * Math.min(1, absF / P.maxSpeed);
-      this.a += this.steer * P.steerRate * low * high * Math.sign(vF) * (this.offTrack ? 0.8 : 1) * dt;
+      this.a += this.steer * P.steerRate * C.steer * (aero ? 0.82 : 1) * low * high * Math.sign(vF) * (this.offTrack ? 0.8 : 1) * dt;
       this.a = wrapAngle(this.a);
 
       fx = Math.cos(this.a); fy = Math.sin(this.a);
@@ -427,16 +475,26 @@
       vF = this.vx * fx + this.vy * fy;
       let vR = this.vx * rx + this.vy * ry;
 
-      const maxS = P.maxSpeed * this.power * (this.offTrack ? P.offTrackMax : 1);
+      // Batterie : déploiement à pleine charge, récupération au freinage et au lever de pied
+      let deploy = 0;
+      if (inp.throttle > 0.6 && vF > 150 && this.battery > 0.002) deploy = inp.boost ? E.boost : E.deploy;
+      const harvest = inp.brake > 0 ? E.harvestBrake * inp.brake : inp.throttle <= 0.1 && vF > 100 ? E.harvestLift : 0;
+      this.battery = Math.min(1, Math.max(0, this.battery + (harvest - deploy) * dt));
+      this.deploying = deploy > 0;
+      this.boosting = deploy === E.boost;
+      const ers = deploy > 0 ? (this.boosting ? E.boostGain : E.gain) : this.battery <= 0.002 ? E.empty : 0;
+      const pw = this.power * (1 + ers);
+
+      const maxS = P.maxSpeed * pw * (1 + 0.045 * aero) * (this.offTrack ? P.offTrackMax : 1);
       if (inp.throttle > 0 && vF > -10) {
         const r = Math.max(0, vF / maxS);
-        vF += P.accel * this.power * inp.throttle * Math.max(0, 1 - Math.pow(r, 1.7)) * dt;
+        vF += P.accel * pw * C.accel * inp.throttle * Math.max(0, 1 - Math.pow(r, 1.7)) * dt;
       }
       if (inp.brake > 0) {
-        if (vF > 5) vF = Math.max(0, vF - P.brake * inp.brake * dt);
+        if (vF > 5) vF = Math.max(0, vF - P.brake * C.brake * inp.brake * dt);
         else vF = Math.max(-P.reverseMax, vF - P.accel * 0.45 * inp.brake * dt);
       }
-      vF -= vF * P.drag * dt;
+      vF -= vF * P.drag * (1 - 0.35 * aero) * dt;
       if (inp.throttle <= 0 && inp.brake <= 0) {
         const roll = 60 * dt;
         vF = Math.abs(vF) < roll ? 0 : vF - Math.sign(vF) * roll;
@@ -449,7 +507,7 @@
       }
 
       this.skid = Math.abs(vR);
-      vR *= Math.exp(-P.grip * (this.offTrack ? 0.55 : 1) * dt);
+      vR *= Math.exp(-P.grip * C.grip * (inp.stability ? 1.35 : 1) * (aero ? 0.85 : 1) * (this.offTrack ? 0.55 : 1) * dt);
 
       this.vx = fx * vF + rx * vR;
       this.vy = fy * vF + ry * vR;
@@ -554,12 +612,23 @@
     const err = wrapAngle(Math.atan2(ty - car.y, tx - car.x) - car.a);
     const steer = clamp(err * 3.2, -1, 1);
 
-    const vt = track.vp[(car.idx + Math.round((20 + speed * 0.1) / sp)) % N] * car.skill;
+    const vt = track.vp[(car.idx + Math.round((20 + speed * 0.1) / sp)) % N] * car.skill * (car.wx || 1);
     let throttle = 0, brake = 0;
     if (speed < vt - 5 && !lift) throttle = 1;
     else if (speed > vt + 25) brake = clamp((speed - vt) / 160, 0.2, 1);
     if (Math.abs(err) > 1.2 && speed > 200) { throttle = 0; brake = 0.5; }
-    return { steer, throttle, brake };
+    // Boost quand une voiture est juste devant et que la batterie le permet
+    let boost = false;
+    if (car.battery > 0.35 && throttle) {
+      for (const o of cars) {
+        if (o === car) continue;
+        const dx = o.x - car.x, dy = o.y - car.y;
+        const fwd = dx * fx + dy * fy;
+        if (fwd > 40 && fwd < 400 && Math.abs(-dx * fy + dy * fx) < 120) { boost = true; break; }
+      }
+    }
+    const aero = !!track.aeroZone && track.aeroZone[car.idx] === 1 && !brake && Math.abs(steer) < 0.3;
+    return { steer, throttle, brake, boost, aero };
   };
 
   // Temps au tour de référence (IA parfaite, voiture au maximum) — mis en cache
@@ -586,8 +655,12 @@
   // ---------- Course / qualification jouée ----------
   // entries : [{ id, name, code, num, team, isPlayer, skill, power }] dans l'ordre de la grille
   class Race {
-    constructor({ track, entries, laps, mode }) {
+    constructor({ track, entries, laps, mode, weather, aeroMode, assists }) {
       this.track = track;
+      this.weather = F1.WEATHER[weather] ? weather : 'dry';
+      this.cond = Object.assign({}, F1.WEATHER[this.weather], { aero: aeroMode || 'auto' });
+      this.aeroMode = aeroMode || 'auto';
+      this.assists = assists || {};
       this.mode = mode || 'race';
       this.laps = this.mode === 'quali' ? 1 : laps;
       this.time = 0;
@@ -602,6 +675,7 @@
       entries.forEach((e, g) => {
         const car = new Car(Object.assign({ lanePref: (rand() - 0.5) * 24 }, e));
         car.grid = g + 1;
+        car.wx = this.cond.ai;
         if (this.mode === 'quali') {
           const s = -2600;
           car.placeOnTrack(track, s, 0, track.vp[track.idxAt(s)] * 0.75);
@@ -625,9 +699,9 @@
           car.throttle = playerInput && car.isPlayer ? playerInput.throttle : 0;
           continue;
         }
-        if (car.isPlayer && !car.finished && playerInput) inp = playerInput;
+        if (car.isPlayer && !car.finished && playerInput) inp = this.playerAssist(car, playerInput, dt);
         else inp = F1.aiInput(car, tr, this.cars, dt);
-        car.update(dt, inp, tr);
+        car.update(dt, inp, tr, this.cond);
         if (!car.isPlayer || car.finished) {
           if (car.speed < 40) car.stuck += dt; else car.stuck = 0;
           if (car.stuck > 2.5) car.resetOnTrack(tr);
@@ -637,6 +711,30 @@
       this.hits = this.cars.length > 1 ? F1.collide(this.cars) : [];
       if (this.hits.length) for (const car of this.cars) car.trackUpdate(tr);
       if (this.started) this.updateLaps();
+    }
+
+    // Aides au pilotage et aéro pour le joueur
+    playerAssist(car, raw, dt) {
+      const tr = this.track, N = tr.n, A = this.assists;
+      const inp = Object.assign({}, raw);
+      const speed = car.speed;
+      if (A.steer || A.brake) {
+        const ai = F1.aiInput(car, tr, this.cars, dt);
+        if (A.steer) inp.steer = Math.max(-1, Math.min(1, inp.steer * 0.6 + ai.steer * 0.4));
+        if (A.brake) {
+          const vt = tr.vp[(car.idx + Math.round((30 + speed * 0.12) / tr.spacing)) % N] * this.cond.ai * 1.03;
+          if (speed > vt + 20) { inp.throttle = 0; inp.brake = Math.max(inp.brake, Math.min(1, Math.max(0.3, (speed - vt) / 150))); }
+        }
+      }
+      if (A.tc) {
+        inp.stability = true;
+        if (car.skid > 90) inp.throttle *= 0.5;
+      }
+      // Aéro : automatique, manuelle (bouton) ou désactivée
+      if (this.aeroMode === 'auto') inp.aero = tr.aeroZone[car.idx] === 1 && inp.brake < 0.1 && Math.abs(inp.steer) < 0.35;
+      else if (this.aeroMode === 'manual') inp.aero = !!raw.aero;
+      else inp.aero = false;
+      return inp;
     }
 
     updateLaps() {

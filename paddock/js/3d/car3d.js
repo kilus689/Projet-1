@@ -275,7 +275,7 @@
   }
 
   // ---------- Matériaux ----------
-  const COMPOUND = [0xd7262e, 0xf2c21b, 0xeeeeee];
+  const COMPOUND = [0xd7262e, 0xf2c21b, 0xeeeeee, 0x2fbf4a];
   const matCache = new Map();
   function materials(team, num) {
     const key = team.color + team.color2 + num;

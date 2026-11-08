@@ -99,10 +99,27 @@
 
     show(on) { if (this.renderer) this.renderer.domElement.classList.toggle('hidden', !on); }
 
-    setTrack(track, scene2d) {
-      if (this.trackId === track.id && this.world) return;
+    setTrack(track, scene2d, weather) {
+      weather = weather || 'dry';
+      if (this.trackId === track.id && this.world && this.weather === weather) return;
+      this.weather = weather;
       if (this.world) this.dispose();
-      this.world = X.buildWorld(track, scene2d, this.quality);
+      this.world = X.buildWorld(track, scene2d, this.quality, weather);
+      this.rain = null;
+      if (weather === 'rain') {
+        // Gouttes : segments qui tombent dans une boîte autour de la caméra
+        const n = this.quality === 'low' ? 900 : 2200;
+        const pos = new Float32Array(n * 6);
+        for (let i = 0; i < n; i++) {
+          const x = (Math.random() - 0.5) * 400, y = Math.random() * 200, z = (Math.random() - 0.5) * 400;
+          pos.set([x, y, z, x + 0.6, y - 9, z], i * 6);
+        }
+        const g = new T.BufferGeometry();
+        g.setAttribute('position', new T.BufferAttribute(pos, 3));
+        this.rain = new T.LineSegments(g, new T.LineBasicMaterial({ color: 0xc8d2dc, transparent: true, opacity: 0.45, fog: false }));
+        this.rain.frustumCulled = false;
+        this.world.scene.add(this.rain);
+      }
       this.scene = this.world.scene;
       this.envRT = this.pmrem.fromEquirectangular(this.world.sky);
       this.scene.environment = this.envRT.texture;
@@ -128,7 +145,7 @@
       for (const v of this.cars.values()) this.scene.remove(v.g);
       this.cars.clear();
       race.cars.forEach((c, k) => {
-        const m = X.makeCar(c.team, c.num || k + 1, c.isPlayer, (c.num || k) % 3);
+        const m = X.makeCar(c.team, c.num || k + 1, c.isPlayer, race.weather === 'rain' ? 3 : (c.num || k) % 3);
         this.scene.add(m.g);
         this.cars.set(c, m);
       });
@@ -161,6 +178,8 @@
         // Légère prise de roulis/tangage avec les forces
         m.g.rotation.z = pitch + Math.max(-0.02, Math.min(0.02, (c.brakeIn > 0.5 ? 0.012 : c.throttle > 0 ? -0.006 : 0)));
       }
+
+      if (this.world.racingLine) this.world.racingLine.visible = !!(race.assists && race.assists.line);
 
       // Feux du portique de départ
       const lights = opts && opts.lights != null ? opts.lights : 0;
@@ -207,6 +226,19 @@
         this.wheel.rotation.set(-0.35, 0, -focus.steer * 1.5);
         const rpm = (sp * 8) % 1;
         this.wheel.userData.leds.forEach((l, k) => l.m.color.copy(k / 8 < rpm ? l.c : new T.Color(0x1a1a1a)));
+      }
+      if (this.rain) {
+        const a = this.rain.geometry.getAttribute('position');
+        const arr = a.array, fall = 950 * dt;
+        for (let i = 0; i < arr.length; i += 6) {
+          arr[i + 1] -= fall; arr[i + 4] -= fall;
+          if (arr[i + 4] < -20) {
+            const x = (Math.random() - 0.5) * 400, z = (Math.random() - 0.5) * 400, y = 160 + Math.random() * 40;
+            arr[i] = x; arr[i + 1] = y; arr[i + 2] = z; arr[i + 3] = x + 0.6; arr[i + 4] = y - 9; arr[i + 5] = z;
+          }
+        }
+        a.needsUpdate = true;
+        this.rain.position.set(cam.position.x, cam.position.y - 100, cam.position.z);
       }
       this.renderer.render(this.scene, cam);
     }

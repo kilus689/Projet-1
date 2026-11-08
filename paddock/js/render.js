@@ -106,6 +106,24 @@
       }
     }
 
+    // Trajectoire idéale (aide) : morceaux verts / rouges
+    const RL = track.racingLine();
+    scene.line = [];
+    let start = 0;
+    for (let i = 1; i <= N; i++) {
+      if (i === N || RL.brake[i % N] !== RL.brake[start] || i - start > 120) {
+        const path = new Path2D();
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (let t = start; t <= Math.min(i, N); t++) {
+          const p = pts[t % N];
+          const x = p.x + p.nx * RL.lat[t % N], y = p.y + p.ny * RL.lat[t % N];
+          if (t === start) path.moveTo(x, y); else path.lineTo(x, y);
+          minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+        }
+        scene.line.push({ path, red: RL.brake[start] === 1, l: minX - 10, t: minY - 10, r: maxX + 10, b: maxY + 10 });
+        start = i;
+      }
+    }
     scene.mini = buildMinimap(track, 180);
     return scene;
   }
@@ -491,6 +509,16 @@
 
       this.drawStart(ctx, race);
 
+      if (race.assists && race.assists.line) {
+        ctx.lineWidth = 7;
+        ctx.lineCap = 'butt';
+        for (const L of sc.line) {
+          if (!inView(L)) continue;
+          ctx.strokeStyle = L.red ? 'rgba(230,30,30,0.6)' : 'rgba(40,220,90,0.5)';
+          ctx.stroke(L.path);
+        }
+      }
+
       if (this.skids.length) {
         ctx.strokeStyle = 'rgba(15,15,15,0.33)';
         ctx.lineWidth = 5;
@@ -535,6 +563,22 @@
       // Codes pilotes au-dessus des voitures adverses (dessinés à l'écran, jamais tournés)
       const m = ctx.getTransform();
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      if (race.weather === 'rain' || race.weather === 'cloudy') {
+        ctx.fillStyle = race.weather === 'rain' ? 'rgba(40,50,62,0.28)' : 'rgba(60,70,80,0.12)';
+        ctx.fillRect(0, 0, this.w, this.h);
+      }
+      if (race.weather === 'rain') {
+        ctx.strokeStyle = 'rgba(210,220,235,0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const ph = (t * 900) % this.h;
+        for (let k = 0; k < 160; k++) {
+          const x = (k * 97.3 + Math.sin(k) * 40) % this.w;
+          const y = ((k * 53.7) % this.h + ph) % this.h;
+          ctx.moveTo(x, y); ctx.lineTo(x - 3, y + 14);
+        }
+        ctx.stroke();
+      }
       ctx.font = '700 13px system-ui, sans-serif';
       ctx.textAlign = 'center';
       const w = 40;
