@@ -226,6 +226,8 @@
   function showPause() {
     const o = S.opts;
     const btns = [['Reprendre', 'primary', togglePause]];
+    btns.push([`Caméra : ${CAMERAS[camIdx].label}`, '', () => { nextCamera(); showPause(); }]);
+    if (r3d && r3d.ok) btns.push([`Graphismes 3D : ${r3d.qualityLabel}`, '', () => { r3d.cycleQuality(); showPause(); }]);
     if (o.mode === 'race') {
       btns.push(['Simuler la fin de course', '', () => finish(raceResult(false))]);
       if (o.allowRestart) btns.push(['Recommencer', '', () => newRun()]);
@@ -432,7 +434,7 @@
       const use3d = cam.kind === '3d' && r3d && r3d.init();
       if (use3d) {
         r3d.setTrack(race.track, S.scene2d);
-        r3d.draw(race, focus, cam.id, S.state === 'paused' ? 0 : dt);
+        r3d.draw(race, focus, cam.id, S.state === 'paused' ? 0 : dt, { lights: S.state === 'countdown' ? S.lightsShown : 0 });
       } else {
         renderer.rotate = !!cam.rotate;
         renderer.draw(race, focus, S.t, S.state === 'paused' ? 0 : dt);
