@@ -278,6 +278,53 @@
       // Entrée / sortie réelles connues (mètres par rapport à la ligne)
       if (def.pitEntry != null) { this.pit.entry = def.pitEntry; this.pit.a = Math.max(def.pitEntry + 120, this.pit.a); }
       if (def.pitExit != null) { this.pit.exit = def.pitExit; this.pit.z = Math.min(def.pitExit - 120, Math.max(this.pit.z, 40)); }
+      // Voie des stands réelle décrite par rapport aux virages (js/data/season2026.js, champ « pit »)
+      if (def.pit) this.applyPitSpec(def.pit);
+    }
+
+    // Virages (zones de courbure) en indices relatifs à la ligne de départ
+    cornerRuns() {
+      // Virage = rayon < ~110 m sur au moins 15 m (les courbes rapides comme la Parabolica comptent)
+      const N = this.n, TH = 0.0009, runs = [];
+      for (let i = 0; i < N;) {
+        if (Math.abs(this.k[i]) > TH) {
+          let j = i;
+          while (j < N && Math.abs(this.k[j]) > TH) j++;
+          if (j - i >= 15) runs.push({ s: i, e: j });
+          i = j + 1;
+        } else i++;
+      }
+      return runs;
+    }
+
+    // spec : { side: 'R'|'L', entry: [n, 'before'|'after'] (n-ième virage avant la ligne, 1 = dernier)
+    //          ou entryLen: m (longueur de voie avant la sortie), exit: [n, 'before'|'after'] (n-ième virage après la ligne) }
+    applyPitSpec(spec) {
+      const N = this.n, runs = this.cornerRuns(), P = this.pit;
+      if (!runs.length) return;
+      P.side = spec.side === 'L' ? -1 : 1;
+      const before = runs.slice().reverse(); // derniers virages du tour
+      if (spec.exit) {
+        const r = runs[Math.min(runs.length - 1, spec.exit[0] - 1)];
+        P.exit = spec.exit[1] === 'before' ? r.s - 25 : r.e + 25;
+      }
+      if (spec.entryLen) P.entry = P.exit - spec.entryLen;
+      else if (spec.entry) {
+        const r = before[Math.min(before.length - 1, spec.entry[0] - 1)];
+        P.entry = (spec.entry[1] === 'after' ? r.e + 15 : r.s - 45) - N;
+      }
+      if (spec.entryM != null) P.entry = spec.entryM;
+      if (spec.exitM != null) P.exit = spec.exitM;
+      // Garde-fous : entrée avant la ligne, sortie après, longueur raisonnable
+      if (!(P.entry < -150)) P.entry = -400;
+      if (!(P.exit > 80)) P.exit = 250;
+      if (P.entry < -1300) P.entry = -1300;
+      if (P.exit > 900) P.exit = 900;
+      // Partie droite de la voie (garages) entre les deux bretelles
+      // Zone limitée à 80 km/h (devant les garages) : ~350 m autour de la ligne, comme en réalité
+      P.a = Math.max(P.entry + 140, -260);
+      P.z = Math.min(P.exit - 110, 90);
+      if (P.z < P.a + 150) P.z = Math.min(P.exit - 60, P.a + 150);
     }
 
     // Indice relatif à la ligne de départ (négatif avant la ligne)
@@ -932,6 +979,13 @@
           const toLimit = Math.max(0, (P.a - 30 - pit.d) * tr.spacing);
           const dist = Math.max(0, (pit.stopD - pit.d) * tr.spacing);
           target = Math.min(Math.sqrt(VL * VL + 2 * 1100 * toLimit), Math.sqrt(2 * 900 * dist) + 4);
+          // Sur la bretelle d'entrée : pas plus vite que ce que permet la courbe de la piste
+          if (pit.d < P.a - 30) {
+            const N = tr.n, ahead = Math.floor(pit.d);
+            let lim = 900;
+            for (let j = 0; j <= 40; j += 5) lim = Math.min(lim, tr.vp[(((ahead + j) % N) + N) % N]);
+            target = Math.min(target, lim);
+          }
         }
         // Bretelle de sortie : on reprend de la vitesse, sans dépasser ce que permet le virage suivant
         if (pit.phase === 'out' && pit.d > P.z + 30) {
