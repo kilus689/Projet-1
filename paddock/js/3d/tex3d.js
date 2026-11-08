@@ -345,6 +345,10 @@
         g.moveTo(off, y0 + B); g.lineTo(off + 140, y0); g.lineTo(off + 230, y0); g.lineTo(off + 90, y0 + B);
         g.fill();
         g.fillRect(0, y0 + B * 0.47, W, B * 0.035);
+        // Filets fins sur les flancs (style « pinstripe »)
+        g.globalAlpha = 0.9;
+        for (const v of [0.2, 0.26, 0.74, 0.8]) g.fillRect(W * 0.08, y0 + B * v, W * 0.84, B * 0.012);
+        g.globalAlpha = 1;
         g.restore();
       }
       // Numéros (orientés pour être lisibles de chaque côté)
@@ -365,7 +369,7 @@
         g.restore();
       };
       // Coque : numéro sur le dessus du nez (v = 0.5 de la bande 0)
-      drawNum(W * 0.2, band(0) + B * 0.5, 90, 1, 1, Math.PI / 2);
+      drawNum(W * 0.24, band(0) + B * 0.5, 54, 1, 1, Math.PI / 2);
       // Capot moteur : côtés droit (v=0.25) et gauche (v=0.75)
       drawNum(W * 0.33, band(1) + B * 0.75, 70, -1, 1);
       drawNum(W * 0.33, band(1) + B * 0.25, 70, 1, -1);
