@@ -175,6 +175,7 @@
           if (w.front) w.pivot.rotation.y = -c.steer * 0.35;
         }
         m.helmet.visible = !(c === focus && mode === 'cockpit');
+        if (m.tyre !== c.tyre) { m.tyre = c.tyre; const rm = X.ringMat(c.tyre); for (const r of m.rings) r.material = rm; }
         // Légère prise de roulis/tangage avec les forces
         m.g.rotation.z = pitch + Math.max(-0.02, Math.min(0.02, (c.brakeIn > 0.5 ? 0.012 : c.throttle > 0 ? -0.006 : 0)));
       }

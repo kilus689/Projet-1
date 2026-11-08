@@ -304,26 +304,20 @@
     add(G.merge(gridGeo), white);
 
     // ---------- Barrières ----------
-    const pitSide = scene2d && scene2d.stand
-      ? -Math.sign((scene2d.stand[0].x - p0.x) * p0.nx + (scene2d.stand[0].y - p0.y) * p0.ny) || 1
-      : 1;
-    // Zone des stands le long de la ligne droite de départ
-    let pitRange = null;
-    {
-      const off = pitSide * (half + run + 175);
-      let a = 0, z = 0;
-      const ok = (t) => {
-        const p = track.pts[((t % N) + N) % N];
-        return track.distTo(p.x + p.nx * off, p.y + p.ny * off) > half + run + 150 && track.distTo(p.x + p.nx * off * 0.4, p.y + p.ny * off * 0.4) > Math.abs(off * 0.4) - 25;
-      };
-      while (a > -260 && ok(a - 5)) a -= 5;
-      while (z < 70 && ok(z + 5)) z += 5;
-      if (z - a >= 100) pitRange = [a, z];
-    }
+    // Voie des stands : même tracé que la simulation (track.pit)
+    const TP = track.pit;
+    const pitSide = TP.side;
+    const pitRange = [TP.a, TP.z];
     const inPit = (i, sd) => {
-      if (!pitRange || sd !== pitSide) return false;
-      let d = i > N / 2 ? i - N : i;
+      if (sd !== pitSide) return false;
+      const d = track.rel(i);
       return d >= pitRange[0] && d <= pitRange[1];
+    };
+    // Bretelles d'entrée et de sortie : pas de barrière là où les voitures la traversent
+    const onRamp = (i, sd) => {
+      if (sd !== pitSide) return false;
+      const d = track.rel(i);
+      return (d >= TP.entry - 5 && d < pitRange[0]) || (d > pitRange[1] && d <= TP.exit + 5);
     };
 
     const posts = [], fencePosts = [];
@@ -332,10 +326,10 @@
       const blocked = blockedMask(track, off);
       const free = (i) => !blocked[i];
       if (env === 'street') {
-        add(wall(track, off, 0, 11, 1024, (i) => free(i) && !inPit(i, sd)), std({ map: tx.concrete(), roughness: 0.8 }), true, true);
+        add(wall(track, off, 0, 11, 1024, (i) => free(i) && !inPit(i, sd) && !onRamp(i, sd)), std({ map: tx.concrete(), roughness: 0.8 }), true, true);
       } else {
-        const tec = (i) => free(i) && corner[i] === sd && !inPit(i, sd);
-        const arm = (i) => free(i) && corner[i] !== sd && !inPit(i, sd);
+        const tec = (i) => free(i) && corner[i] === sd && !inPit(i, sd) && !onRamp(i, sd);
+        const arm = (i) => free(i) && corner[i] !== sd && !inPit(i, sd) && !onRamp(i, sd);
         add(wall(track, off, 0, 10, 26, tec), std({ map: tx.tecpro(), roughness: 0.7 }), true, true);
         const armMat = std({ map: tx.armco(), metalness: 0.6, roughness: 0.4 });
         add(wall(track, off, 3.0, 4.6, 40, arm), armMat);
@@ -343,14 +337,14 @@
         for (let i = 0; i < N; i += 4) if (arm(i)) posts.push({ i, off });
       }
       // Muret des stands
-      if (pitRange) add(wall(track, off, 0, 11, 256, (i) => inPit(i, sd)), std({ map: tx.pitwall(), roughness: 0.8 }), true, true);
+      add(wall(track, off, 0, 11, 256, (i) => inPit(i, sd)), std({ map: tx.pitwall(), roughness: 0.8 }), true, true);
       // Grillage de sécurité
       if (quality !== 'low') {
         const fOff = off + sd * 2;
         const top = env === 'street' ? 11 : 0;
         const fence = tx.chainlink().clone(); fence.needsUpdate = true;
         fence.repeat.set(1, 6);
-        add(wall(track, fOff, top, 38, 12, free), std({ map: fence, transparent: false, alphaTest: 0.5, metalness: 0.6, roughness: 0.5 }), false);
+        add(wall(track, fOff, top, 38, 12, (i) => free(i) && !onRamp(i, sd)), std({ map: fence, transparent: false, alphaTest: 0.5, metalness: 0.6, roughness: 0.5 }), false);
         for (let i = 0; i < N; i += 6) if (free(i)) fencePosts.push({ i, off: fOff });
       }
     }
@@ -360,12 +354,30 @@
     instanced(s, new T.CylinderGeometry(0.35, 0.35, 40, 5).translate(0, 20, 0), postMat, fencePosts, (d, P, S) => { pl(d, P, S); S.set(1, 1, 1); });
 
     // ---------- Stands : voie des stands et garages ----------
-    if (pitRange) {
+    {
       const [a, z] = pitRange;
       const o = (v) => pitSide * (half + run + v);
       const rng = (o1, o2) => (pitSide > 0 ? [o(o1), o(o2)] : [o(o2), o(o1)]);
-      add(ribbon(track, rng(3, 55), 0.3, 220, a, z), std({ map: tx.asphalt() }));
-      add(ribbon(track, rng(28, 29.2), 0.36, 400, a, z), white);
+      // Voie (avec bretelles) qui suit exactement le chemin des voitures
+      const lane = (w0, w1, y, mat) => {
+        const pos = [], uv = [], idx = [];
+        let k = 0;
+        for (let d = TP.entry; d <= TP.exit; d++, k++) {
+          const ii = ((d % N) + N) % N, p = track.pts[ii], l = track.pitLat(d), yy = y + H(ii);
+          pos.push(p.x + p.nx * (l + w0), yy, p.y + p.ny * (l + w0), p.x + p.nx * (l + w1), yy, p.y + p.ny * (l + w1));
+          uv.push(0, (d * sp) / 220, 1, (d * sp) / 220);
+          if (k) { const q = (k - 1) * 2; idx.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); }
+        }
+        const g = new T.BufferGeometry();
+        g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+        g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+        g.setIndex(idx);
+        g.computeVertexNormals();
+        add(g, mat);
+      };
+      lane(-26, 26, 0.55, std({ map: tx.asphalt() }));
+      lane(-26, -24.5, 0.62, white);
+      lane(24.5, 26, 0.62, white);
       const keep = (i) => { let d = i > N / 2 ? i - N : i; return d >= a && d <= z; };
       add(wall(track, o(60), 0, 72, 1280, keep), std({ map: tx.garage(), roughness: 0.7 }), true, true);
       add(wall(track, o(60), 72, 112, 300, keep), std({ map: tx.facade(night), roughness: 0.3, metalness: 0.4, emissive: night ? 0x332211 : 0x000000 }), true, true);

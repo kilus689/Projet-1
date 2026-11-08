@@ -48,6 +48,14 @@
     cloudy: { label: 'Nuageux', grip: 1, brake: 1, accel: 1, steer: 1, ai: 1 },
     rain: { label: 'Pluie', grip: 0.62, brake: 0.78, accel: 0.86, steer: 0.86, ai: 0.87 },
   };
+  // Pneus : adhérence relative et durée de vie (fraction de la distance de course avant usure complète)
+  F1.TYRES = {
+    S: { label: 'Tendre', short: 'T', color: '#e10600', grip: 1.035, life: 0.32 },
+    M: { label: 'Médium', short: 'M', color: '#ffd60a', grip: 1.0, life: 0.52 },
+    H: { label: 'Dur', short: 'D', color: '#f2f2f2', grip: 0.975, life: 0.8 },
+    I: { label: 'Intermédiaire', short: 'I', color: '#3ddc84', grip: 1.0, life: 0.65 },
+  };
+  F1.PIT_SPEED = 222; // 80 km/h dans la voie des stands
   // Batterie (ERS 2026) : fractions de batterie par seconde
   F1.ERS = { deploy: 0.03, boost: 0.085, harvestBrake: 0.12, harvestLift: 0.04, gain: 0.06, boostGain: 0.13, empty: -0.08 };
   F1.KMH = 0.36; // px/s -> km/h
@@ -256,6 +264,43 @@
 
       // Relief réel (altitude en mètres le long du tracé, pente)
       this.elevation(def);
+      // Voie des stands le long de la ligne droite de départ
+      this.computePit();
+    }
+
+    computePit() {
+      const N = this.n, half = this.half, run = this.runoff;
+      let best = null;
+      for (const side of [1, -1]) {
+        const off = side * (half + run + 175);
+        const ok = (t) => {
+          const p = this.pts[((t % N) + N) % N];
+          return this.distTo(p.x + p.nx * off, p.y + p.ny * off) > half + run + 150 &&
+            this.distTo(p.x + p.nx * off * 0.4, p.y + p.ny * off * 0.4) > Math.abs(off * 0.4) - 25;
+        };
+        let a = 0, z = 0;
+        while (a > -260 && ok(a - 5)) a -= 5;
+        while (z < 70 && ok(z + 5)) z += 5;
+        if (!best || z - a > best.z - best.a) best = { side, a, z };
+      }
+      if (best.z - best.a < 100) { best.a = -150; best.z = 50; }
+      const lane = half + run + 29;
+      this.pit = { side: best.side, a: best.a, z: best.z, lane, entry: best.a - 150, exit: best.z + 150 };
+    }
+
+    // Indice relatif à la ligne de départ (négatif avant la ligne)
+    rel(i) { return i > this.n / 2 ? i - this.n : i; }
+
+    // Décalage latéral de la voie des stands à la distance relative d (échantillons)
+    pitLat(d) {
+      const P = this.pit;
+      const sm = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+      let f = 0;
+      if (d <= P.entry || d >= P.exit) f = 0;
+      else if (d < P.a - 30) f = sm((d - P.entry) / (P.a - 30 - P.entry));
+      else if (d <= P.z + 30) f = 1;
+      else f = 1 - sm((d - P.z - 30) / (P.exit - P.z - 30));
+      return P.side * P.lane * f;
     }
 
     cellKey(cx, cy) { return cx * 65536 + cy; }
@@ -425,6 +470,7 @@
         lane: 0, lanePref: 0, stuck: 0, wrongWay: 0,
         throttle: 0, brakeIn: 0, gap: 0,
         battery: 0.85, aeroOpen: false, boosting: false, deploying: false,
+        tyre: 'M', wear: 0, tyreF: 1, stops: 0, pitReq: false, nextTyre: null, pit: null, prevProg: null,
       }, o);
     }
 
@@ -451,7 +497,9 @@
 
     update(dt, inp, track, cond) {
       const P = PHYS, E = F1.ERS;
-      const C = cond || F1.WEATHER.dry;
+      const C0 = cond || F1.WEATHER.dry;
+      const tf = this.tyreF || 1;
+      const C = { grip: C0.grip * tf, steer: C0.steer * (0.5 + 0.5 * tf), brake: C0.brake * (0.7 + 0.3 * tf), accel: C0.accel * (0.8 + 0.2 * tf), aero: C0.aero };
       this.steer += (inp.steer - this.steer) * Math.min(1, dt * 10);
       this.throttle = inp.throttle;
       this.brakeIn = inp.brake;
@@ -529,6 +577,7 @@
       this.lat = (this.x - p.x) * p.nx + (this.y - p.y) * p.ny;
       const ad = Math.abs(this.lat);
       this.offTrack = ad > track.half + 6;
+      if (this.pit) { this.offTrack = false; return; }
 
       // Mur / barrière
       const lim = track.half + track.runoff;
@@ -612,7 +661,7 @@
     const err = wrapAngle(Math.atan2(ty - car.y, tx - car.x) - car.a);
     const steer = clamp(err * 3.2, -1, 1);
 
-    const vt = track.vp[(car.idx + Math.round((20 + speed * 0.1) / sp)) % N] * car.skill * (car.wx || 1);
+    const vt = track.vp[(car.idx + Math.round((20 + speed * 0.1) / sp)) % N] * car.skill * (car.wx || 1) * (0.55 + 0.45 * (car.tyreF || 1));
     let throttle = 0, brake = 0;
     if (speed < vt - 5 && !lift) throttle = 1;
     else if (speed > vt + 25) brake = clamp((speed - vt) / 160, 0.2, 1);
@@ -655,7 +704,7 @@
   // ---------- Course / qualification jouée ----------
   // entries : [{ id, name, code, num, team, isPlayer, skill, power }] dans l'ordre de la grille
   class Race {
-    constructor({ track, entries, laps, mode, weather, aeroMode, assists }) {
+    constructor({ track, entries, laps, mode, weather, aeroMode, assists, tyreWear, playerTyre }) {
       this.track = track;
       this.weather = F1.WEATHER[weather] ? weather : 'dry';
       this.cond = Object.assign({}, F1.WEATHER[this.weather], { aero: aeroMode || 'auto' });
@@ -671,11 +720,20 @@
       this.splits = new Map();
       this.bestLap = { time: Infinity, car: null };
       const rand = rng(Date.now());
+      this.rand = rand;
+      this.wearMul = this.mode === 'quali' || tyreWear === 'off' ? 0 : tyreWear === 'high' ? 1.7 : 1;
 
       entries.forEach((e, g) => {
         const car = new Car(Object.assign({ lanePref: (rand() - 0.5) * 24 }, e));
         car.grid = g + 1;
         car.wx = this.cond.ai;
+        // Pneus de départ : intermédiaires sous la pluie, sinon tendres ou médiums (choix du joueur)
+        if (this.weather === 'rain') car.tyre = 'I';
+        else if (this.mode === 'quali') car.tyre = 'S';
+        else if (car.isPlayer && playerTyre) car.tyre = playerTyre;
+        else car.tyre = g < 10 ? (rand() < 0.6 ? 'M' : 'S') : (rand() < 0.5 ? 'H' : 'M');
+        const ti = (F1.TEAMS2026 || []).findIndex((t) => t.id === (car.team && car.team.id));
+        car.garage = ti < 0 ? 10 : ti;
         if (this.mode === 'quali') {
           const s = -2600;
           car.placeOnTrack(track, s, 0, track.vp[track.idxAt(s)] * 0.75);
@@ -699,6 +757,10 @@
           car.throttle = playerInput && car.isPlayer ? playerInput.throttle : 0;
           continue;
         }
+        this.tyres(car);
+        if (car.pit) { this.pitStep(car, dt); continue; }
+        this.maybeEnterPit(car);
+        if (car.pit) { this.pitStep(car, dt); continue; }
         if (car.isPlayer && !car.finished && playerInput) inp = this.playerAssist(car, playerInput, dt);
         else inp = F1.aiInput(car, tr, this.cars, dt);
         car.update(dt, inp, tr, this.cond);
@@ -708,9 +770,129 @@
         }
         car.wrongWay = car.alongTrack < -60 ? car.wrongWay + dt : 0;
       }
-      this.hits = this.cars.length > 1 ? F1.collide(this.cars) : [];
+      this.hits = this.cars.length > 1 ? F1.collide(this.cars.filter((c) => !c.pit)) : [];
       if (this.hits.length) for (const car of this.cars) car.trackUpdate(tr);
       if (this.started) this.updateLaps();
+    }
+
+    // ---------- Pneus ----------
+    lifeOf(compound) {
+      const T = F1.TYRES[compound];
+      let life = T.life;
+      if (compound === 'I' && this.weather !== 'rain') life *= 0.4; // les intermédiaires fondent sur le sec
+      return life;
+    }
+    wearPerLap(compound) { return this.wearMul / (this.lifeOf(compound) * Math.max(1, this.laps)); }
+
+    tyres(car) {
+      const N = this.track.n;
+      const prog = car.wrap * N + car.idx;
+      if (car.prevProg != null) {
+        const d = prog - car.prevProg;
+        if (d > 0 && d < 60) car.wear += (d / N) * this.wearPerLap(car.tyre);
+      }
+      car.prevProg = prog;
+      const T = F1.TYRES[car.tyre];
+      let g = T.grip;
+      if (this.weather === 'rain' && car.tyre !== 'I') g *= 0.8;   // pneus slicks sous la pluie
+      if (this.weather !== 'rain' && car.tyre === 'I') g *= 0.94;
+      const w = car.wear;
+      car.tyreF = Math.max(0.55, g * (1 - 0.16 * Math.pow(Math.min(w, 1), 1.6) - Math.max(0, w - 1) * 0.5));
+      if (!car.isPlayer && !car.pitReq && !car.pit && !car.finished && this.mode === 'race') this.aiStrategy(car);
+    }
+
+    // Gomme la plus rapide qui tient jusqu'à l'arrivée (ou la plus dure)
+    bestTyreFor(lapsLeft) {
+      if (this.weather === 'rain') return 'I';
+      for (const c of ['S', 'M', 'H']) if (this.wearPerLap(c) * lapsLeft <= 0.95) return c;
+      return 'H';
+    }
+
+    lapsLeft(car) {
+      const N = this.track.n;
+      const done = car.wrap + Math.max(0, this.track.rel(car.idx)) / N;
+      return Math.max(0, this.laps - done);
+    }
+
+    aiStrategy(car) {
+      if (!this.wearMul && !(this.weather === 'rain' && car.tyre !== 'I')) return;
+      const left = this.lapsLeft(car);
+      if (left < 0.4) return;
+      const proj = car.wear + this.wearPerLap(car.tyre) * left;
+      // On s'arrête le plus tard possible : pneus bien usés ET impossible de finir avec
+      car.pitTh = car.pitTh || 0.7 + this.rand() * 0.2;
+      const wrongTyres = this.weather === 'rain' ? car.tyre !== 'I' : car.tyre === 'I';
+      if (wrongTyres || (proj > 1.0 && car.wear > car.pitTh)) {
+        car.pitReq = true;
+        car.nextTyre = this.bestTyreFor(left - 0.3);
+      }
+    }
+
+    // ---------- Arrêts au stand ----------
+    maybeEnterPit(car) {
+      if (!car.pitReq || car.finished || this.mode !== 'race') return;
+      const P = this.track.pit, d = this.track.rel(car.idx);
+      if (d >= P.entry - 40 && d <= P.entry + 3) {
+        const span = P.z - P.a - 40;
+        car.pit = { d, v: car.speed, stopD: P.a + 20 + (Math.min(10, car.garage) / 10) * span, phase: 'in', stopT: 0, t0: this.time };
+        car.pitReq = false;
+        car.aeroOpen = false;
+        if (!car.nextTyre) car.nextTyre = this.bestTyreFor(this.lapsLeft(car) - 0.3);
+        this.events.push({ type: 'pitIn', car });
+      }
+    }
+
+    pitStep(car, dt) {
+      const tr = this.track, N = tr.n, pit = car.pit, P = tr.pit;
+      const VL = F1.PIT_SPEED;
+      if (pit.phase === 'stop') {
+        pit.stopT -= dt;
+        car.vx = car.vy = 0;
+        if (pit.stopT <= 0) {
+          car.tyre = car.nextTyre || 'M';
+          car.wear = 0;
+          car.nextTyre = null;
+          car.stops++;
+          car.battery = Math.max(car.battery, 0.5);
+          pit.phase = 'out';
+        }
+      } else {
+        // Freinage jusqu'à la limite de vitesse, arrêt au garage, puis réaccélération
+        let target = VL;
+        if (pit.phase === 'in') {
+          // Bretelle d'entrée plus rapide, limitation à 80 km/h dans la voie, puis arrêt au garage
+          const toLimit = Math.max(0, (P.a - 30 - pit.d) * tr.spacing);
+          const dist = Math.max(0, (pit.stopD - pit.d) * tr.spacing);
+          target = Math.min(Math.sqrt(VL * VL + 2 * 1100 * toLimit), Math.sqrt(2 * 900 * dist) + 4);
+        }
+        if (pit.phase === 'out' && pit.d > P.z + 30) target = 600; // bretelle de sortie : on reprend de la vitesse
+        pit.v = pit.v > target ? Math.max(target, pit.v - 1300 * dt) : Math.min(target, pit.v + 500 * dt);
+        pit.d += (pit.v * dt) / tr.spacing;
+        if (pit.phase === 'in' && pit.d >= pit.stopD - 0.05) {
+          pit.d = pit.stopD;
+          pit.phase = 'stop';
+          pit.stationary = 2.1 + this.rand() * 0.6 + (this.rand() < 0.05 ? 2.5 : 0);
+          pit.stopT = pit.stationary;
+          pit.v = 0;
+        }
+      }
+      // Position sur la voie (interpolée entre deux échantillons)
+      const di = Math.floor(pit.d), f = pit.d - di;
+      const p0 = tr.pts[((di % N) + N) % N], p1 = tr.pts[(((di + 1) % N) + N) % N];
+      const l0 = tr.pitLat(di), l1 = tr.pitLat(di + 1);
+      const x0 = p0.x + p0.nx * l0, y0 = p0.y + p0.ny * l0, x1 = p1.x + p1.nx * l1, y1 = p1.y + p1.ny * l1;
+      car.x = x0 + (x1 - x0) * f;
+      car.y = y0 + (y1 - y0) * f;
+      car.a = Math.atan2(y1 - y0, x1 - x0);
+      car.vx = Math.cos(car.a) * pit.v;
+      car.vy = Math.sin(car.a) * pit.v;
+      car.steer = 0; car.throttle = pit.phase === 'out' ? 1 : 0; car.brakeIn = 0;
+      car.trackUpdate(tr);
+      if (pit.d >= P.exit) {
+        this.events.push({ type: 'pit', car, stationary: pit.stationary || 0, total: this.time - pit.t0, tyre: car.tyre });
+        car.pit = null;
+        car.stuck = 0;
+      }
     }
 
     // Aides au pilotage et aéro pour le joueur

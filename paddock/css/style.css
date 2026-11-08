@@ -381,3 +381,60 @@ kbd {
   .circuit-row canvas { display: none; }
   .ers { min-width: 90px; }
 }
+
+/* ---------- Habillage télé (style propre au jeu) ---------- */
+#leaderboard.tower { padding: 4px; min-width: 238px; font-size: 15px; background: rgba(10, 12, 18, 0.82); }
+#leaderboard.tower li { gap: 6px; padding: 1px 6px 1px 2px; height: 22px; }
+#leaderboard.tower .p { width: 22px; color: #fff; }
+#leaderboard.tower .g { min-width: 52px; text-align: right; color: #d0d4dc; }
+#leaderboard.tower .tb { width: 18px; height: 18px; font-size: 11px; }
+#leaderboard.tower .st { width: 12px; font-size: 11px; color: var(--muted); text-align: center; }
+#leaderboard.tower .pit { font-size: 10px; font-weight: 800; color: #0d0f14; background: var(--accent-2); border-radius: 3px; padding: 0 4px; }
+#leaderboard.tower .fl { color: var(--purple); font-size: 12px; }
+#leaderboard.tower li.me { background: rgba(255, 255, 255, 0.18); }
+.tyre-badge {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%;
+  border: 3px solid #ffd60a; background: #111; color: #fff; font-size: 12px; font-weight: 800; padding: 0; line-height: 1;
+}
+.tyre-badge.s { border-color: #e10600; } .tyre-badge.m { border-color: #ffd60a; }
+.tyre-badge.h { border-color: #f2f2f2; } .tyre-badge.i { border-color: #3ddc84; }
+.tv-lap {
+  position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 10px; align-items: center; padding: 4px 16px; border-radius: 6px;
+  background: rgba(10, 12, 18, 0.82); border-bottom: 3px solid var(--accent);
+  font-size: 22px; font-weight: 800; font-style: italic; letter-spacing: 0.04em;
+}
+.tv-banner {
+  position: absolute; left: 12px; bottom: max(110px, calc(env(safe-area-inset-bottom) + 100px));
+  display: flex; flex-direction: column; min-width: 280px; max-width: 420px;
+  background: rgba(10, 12, 18, 0.9); border-left: 5px solid var(--accent); border-radius: 4px;
+  padding: 8px 14px; transform: translateX(-120%); transition: transform 0.35s ease;
+}
+.tv-banner.show { transform: translateX(0); }
+.tv-banner .bn-kicker { font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
+.tv-banner .bn-main { font-size: 24px; font-weight: 800; font-style: italic; line-height: 1.1; }
+.tv-banner .bn-sub { font-size: 15px; color: #d0d4dc; }
+.tv-banner.purple { border-left-color: var(--purple); } .tv-banner.purple .bn-kicker { color: var(--purple); }
+.tv-banner.yellow { border-left-color: var(--accent-2); } .tv-banner.yellow .bn-kicker { color: var(--accent-2); }
+.tv-banner.green { border-left-color: var(--good); }
+.tyre-panel { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); left: 12px; padding: 6px 10px; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
+.tp-row { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tp-row .tyre-badge { width: 30px; height: 30px; font-size: 15px; }
+.tp-wear { width: 90px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.tp-wear span { display: block; height: 100%; width: 0; background: var(--good); }
+.tp-pit { display: flex; flex-direction: column; gap: 4px; }
+.tp-pit-title { font-size: 12px; font-weight: 800; color: var(--accent-2); text-transform: uppercase; letter-spacing: 0.08em; }
+.tp-choices { display: flex; gap: 6px; }
+.tp-choices .tyre-badge { width: 34px; height: 34px; font-size: 15px; cursor: pointer; }
+.tp-choices .tyre-badge.sel { box-shadow: 0 0 0 3px #fff; }
+#touch button.pit-btn { border-color: rgba(255, 214, 10, 0.8); font-size: 12px; }
+#touch button.pit-btn.on { background: rgba(255, 214, 10, 0.4); }
+@media (max-width: 760px) {
+  .tv-lap { font-size: 16px; padding: 3px 10px; }
+  .tv-banner { min-width: 200px; bottom: 170px; }
+  .tv-banner .bn-main { font-size: 18px; }
+  .tyre-panel { bottom: auto; top: 70px; }
+}
+
+.touch-mode .tyre-panel { bottom: auto; top: 54px; left: 50%; transform: translateX(-50%); flex-direction: row; align-items: center; }
+.touch-mode .tv-banner { bottom: auto; top: 130px; }

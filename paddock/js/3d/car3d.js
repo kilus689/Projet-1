@@ -340,8 +340,10 @@
     };
     mk(15, 7.85, S.wheelF, true); mk(15, -7.85, S.wheelF, true);
     mk(-19, 7.45, S.wheelR, false); mk(-19, -7.45, S.wheelR, false);
-    return { g, wheels, helmet, spin: 0 };
+    const rings = wheels.map((w) => w.wh.children[2]);
+    return { g, wheels, helmet, spin: 0, rings };
   };
+  X.ringMat = function (tyre) { return commonMats().rings[{ S: 0, M: 1, H: 2, I: 3 }[tyre] || 1]; };
 
   X.geo = { loft, airfoil, plate, rod, merge, at };
 })();
