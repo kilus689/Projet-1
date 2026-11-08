@@ -35,6 +35,17 @@ En 4 étapes : **circuit** (liste des 24 Grands Prix avec le drapeau du pays) �
 **pilote** de l'écurie → **réglages** : météo (sec, nuageux, pluie, aléatoire), difficulté de l'IA,
 aides au pilotage, sensibilité de la direction, aéro active, distance et qualifications.
 
+### Habillage télé et arrêts au stand
+- **Habillage pendant la course** (style propre au jeu) : tour de classement avec écarts, gomme
+  et nombre d'arrêts de chaque pilote, mention STAND, meilleur tour ; compteur de tours et météo ;
+  bandeaux (pilote sur la grille, duels à moins de 0,6 s, meilleur tour, arrêts, dernier tour, arrivée).
+- **Pneus** : tendres (T), médiums (M), durs (D) et intermédiaires (I) sous la pluie. L'usure fait
+  perdre de l'adhérence ; elle est calculée sur la distance de la course, donc une course courte
+  demande aussi un arrêt. Réglages : usure désactivée / normale / forte, gomme de départ.
+- **Arrêts au stand** : STAND / touche B pour rentrer au prochain passage, choix de la gomme
+  (T, M, D, I ou touches 1 à 4). Voie des stands limitée à 80 km/h, arrêt d'environ 2,5 s au garage
+  de l'écurie (perte totale d'environ 24 s). L'IA s'arrête selon l'usure et choisit sa gomme.
+
 ### Batterie, aéro active, météo et aides
 - **Batterie (ERS)** : se vide en accélérant, se recharge au freinage et au lever de pied ;
   batterie vide = perte de puissance. **Boost** (⚡ / touche E) : plus de puissance, consommation accrue.
@@ -85,6 +96,7 @@ Les vues 3D utilisent [three.js](https://threejs.org) (inclus dans `js/vendor/`,
 | Pause | Échap / P | Start |
 | Boost (batterie) | E / Maj | RB |
 | Aéro active (mode manuel) | Espace | LB |
+| Arrêt au stand / choix des pneus | B / 1 à 4 | |
 | Couper le son | M | |
 | Changer de caméra | C | |
 

@@ -215,6 +215,10 @@
     parts.push(h('div', { class: 'row' },
       h('section', null, h('h3', null, 'Sensibilité de la direction'), seg(Object.entries(S.SENS).map(([k, v]) => [k, v.label]), st.sens, (v) => { S.set({ sens: v }); rerender(); })),
       h('section', null, h('h3', null, 'Aéro active'), seg(Object.entries(S.AERO), st.aero, (v) => { S.set({ aero: v }); rerender(); }))));
+    parts.push(h('div', { class: 'row' },
+      h('section', null, h('h3', null, 'Usure des pneus'), seg(Object.entries(S.WEAR), st.tyreWear, (v) => { S.set({ tyreWear: v }); rerender(); })),
+      h('section', null, h('h3', null, 'Pneus de départ'), seg([['S', '🔴 Tendres'], ['M', '🟡 Médiums'], ['H', '⚪ Durs']], st.startTyre, (v) => { S.set({ startTyre: v }); rerender(); }))));
+    parts.push(h('p', { class: 'hint' }, 'Arrêts au stand : bouton STAND / touche B pour rentrer au prochain passage, puis choix de la gomme (T, M, D, I ou touches 1 à 4). Usure calculée sur la distance de la course : une course courte demande quand même un arrêt. Sous la pluie, il faut des pneus intermédiaires (I).'));
     parts.push(h('p', { class: 'hint' }, 'Batterie : elle se vide en accélérant et se recharge au freinage. ⚡ / touche E : boost (plus de puissance, vide la batterie plus vite). Aéro active manuelle : bouton AÉRO / Espace dans les lignes droites ; elle se referme au freinage.'));
     return parts;
   }
@@ -255,7 +259,7 @@
       const q = C.simQuali(c, gp, playerTime);
       F1.Session.start({
         gp, mode: 'race', laps: C.lapsFor(c, gp), entries: C.entries(c, q.order, c.playerDriver), allowRestart: true,
-        title: gp.gp, weather,
+        title: gp.gp, weather, playerTyre: F1.Settings.get().startTyre,
         onEnd: (res) => { if (!res) return quickSettings(); showRaceResults(c, gp, res, quickSettings, q); },
       });
     };
@@ -270,7 +274,8 @@
 
   // Résultats d'une course (rapide ou carrière)
   function showRaceResults(c, gp, res, onContinue, quali, rows) {
-    const list = rows || res.order.map((o, i) => ({ id: o.id, pos: i + 1, dnf: o.dnf, gap: o.gap, time: o.time, lapsDown: o.lapsDown, pts: !o.dnf && i < 10 ? F1.POINTS[i] : 0 }));
+    const list = (rows || res.order.map((o, i) => ({ id: o.id, pos: i + 1, dnf: o.dnf, gap: o.gap, time: o.time, lapsDown: o.lapsDown, pts: !o.dnf && i < 10 ? F1.POINTS[i] : 0 })))
+      .map((r) => Object.assign({}, r, { stops: (res.order.find((o) => o.id === r.id) || {}).stops }));
     const tbody = h('tbody');
     list.forEach((r, i) => {
       const d = C.driver(c, r.id);
@@ -287,6 +292,7 @@
         h('td', { class: 'hide-sm' }, t.name),
         h('td', { class: 'hide-sm' }, grid ? String(grid) : ''),
         h('td', null, gap),
+        h('td', { class: 'hide-sm' }, r.stops != null ? String(r.stops) : ''),
         h('td', null, r.pts ? `+${r.pts}` : '')));
     });
     const me = list.find((r) => r.id === c.playerDriver);
@@ -294,7 +300,7 @@
       h('p', { class: 'subtitle' }, me ? (me.dnf ? 'Abandon.' : `Vous terminez P${me.pos}${me.pts ? ` (+${me.pts} pts)` : ''}.`) : ''),
       res.fastest ? h('p', { class: 'subtitle' }, `Meilleur tour : ${C.fullName(C.driver(c, res.fastest))} en ${fmt(res.fastestTime)}`) : null,
       h('div', { class: 'table-wrap' }, h('table', { class: 'results-table' },
-        h('thead', null, h('tr', null, h('th', null, 'Pos'), h('th', null, 'Pilote'), h('th', { class: 'hide-sm' }, 'Écurie'), h('th', { class: 'hide-sm' }, 'Grille'), h('th', null, 'Temps'), h('th', null, 'Pts'))),
+        h('thead', null, h('tr', null, h('th', null, 'Pos'), h('th', null, 'Pilote'), h('th', { class: 'hide-sm' }, 'Écurie'), h('th', { class: 'hide-sm' }, 'Grille'), h('th', null, 'Temps'), h('th', { class: 'hide-sm' }, 'Arrêts'), h('th', null, 'Pts'))),
         tbody)),
       h('button', { class: 'primary big', onclick: onContinue }, 'Continuer')));
   }
@@ -622,7 +628,7 @@
     const gp = C.gp(c);
     const grid = c.weekend.quali.order;
     F1.Session.start({
-      gp, mode: 'race', laps: C.lapsFor(c, gp), entries: C.entries(c, grid, c.playerDriver), title: gp.gp, weather: weatherFor(c),
+      gp, mode: 'race', laps: C.lapsFor(c, gp), entries: C.entries(c, grid, c.playerDriver), title: gp.gp, weather: weatherFor(c), playerTyre: F1.Settings.get().startTyre,
       onEnd: (res) => finishRace(c, gp, res),
     });
   }

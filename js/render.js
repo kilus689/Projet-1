@@ -78,7 +78,7 @@
 
     // Tribune près de la ligne de départ
     scene.stand = null;
-    for (const side of [1, -1]) {
+    for (const side of track.pit ? [-track.pit.side, track.pit.side] : [1, -1]) {
       const segs = [];
       let ok = true;
       const off = half + track.runoff + 60;
@@ -123,6 +123,24 @@
         scene.line.push({ path, red: RL.brake[start] === 1, l: minX - 10, t: minY - 10, r: maxX + 10, b: maxY + 10 });
         start = i;
       }
+    }
+    // Voie des stands (même chemin que la simulation)
+    if (track.pit) {
+      const P = track.pit;
+      const path = new Path2D(), garages = new Path2D();
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (let d = P.entry; d <= P.exit; d++) {
+        const p = pts[((d % N) + N) % N], l = track.pitLat(d);
+        const x = p.x + p.nx * l, y = p.y + p.ny * l;
+        if (d === P.entry) path.moveTo(x, y); else path.lineTo(x, y);
+        minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      }
+      for (let d = P.a; d <= P.z; d++) {
+        const p = pts[((d % N) + N) % N], l = P.side * (P.lane + 50);
+        const x = p.x + p.nx * l, y = p.y + p.ny * l;
+        if (d === P.a) garages.moveTo(x, y); else garages.lineTo(x, y);
+      }
+      scene.pitLane = { path, garages, l: minX - 120, t: minY - 120, r: maxX + 120, b: maxY + 120 };
     }
     scene.mini = buildMinimap(track, 180);
     return scene;
@@ -489,6 +507,16 @@
       strokeAll(sc.env.wall, (half + runoff) * 2 + 10);
       // Dégagement
       strokeAll(sc.env.runoff, (half + runoff) * 2);
+      // Voie des stands
+      if (sc.pitLane && inView(sc.pitLane)) {
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = '#f0f0f0'; ctx.lineWidth = 56; ctx.stroke(sc.pitLane.path);
+        ctx.strokeStyle = '#46494e'; ctx.lineWidth = 50; ctx.stroke(sc.pitLane.path);
+        ctx.strokeStyle = '#2b2d31'; ctx.lineWidth = 46; ctx.stroke(sc.pitLane.garages);
+        ctx.setLineDash([60, 8]);
+        ctx.strokeStyle = '#d7dadd'; ctx.lineWidth = 40; ctx.stroke(sc.pitLane.garages);
+        ctx.setLineDash([]);
+      }
       // Vibreurs
       ctx.lineCap = 'butt';
       ctx.lineWidth = 14;

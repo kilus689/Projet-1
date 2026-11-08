@@ -33,6 +33,9 @@
     if (e.code === 'KeyM') toggleMute();
     if (e.code === 'KeyC') nextCamera();
     if (e.code === 'Space' && S.state !== 'idle') { e.preventDefault(); toggleAero(); }
+    if (e.code === 'KeyB' && S.state === 'run') togglePit();
+    const tyreKeys = { Digit1: 'S', Digit2: 'M', Digit3: 'H', Digit4: 'I' };
+    if (tyreKeys[e.code] && S.state === 'run') chooseTyre(tyreKeys[e.code]);
     if (e.code === 'KeyR' && S.state === 'run' && S.race.player && !S.race.player.finished) {
       S.race.player.resetOnTrack(S.race.track);
     }
@@ -95,6 +98,7 @@
     const on = (e) => {
       e.preventDefault();
       if (k === 'aero') { toggleAero(); return; }
+      if (k === 'pit') { togglePit(); return; }
       touch[k] = true; btn.classList.add('active');
       try { btn.setPointerCapture(e.pointerId); } catch (_) { /* ignoré */ }
     };
@@ -106,6 +110,83 @@
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
   });
   const isTouch = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+  document.body.classList.toggle('touch-mode', isTouch);
+
+  // ---------- Arrêts au stand (joueur) ----------
+  function togglePit() {
+    const r = S.race, p = r && r.player;
+    if (!p || r.mode !== 'race' || p.finished || p.pit) return;
+    p.pitReq = !p.pitReq;
+    if (p.pitReq && !p.nextTyre) p.nextTyre = r.bestTyreFor(r.lapsLeft(p) - 0.3);
+    toast(p.pitReq ? `Arrêt au stand ce tour-ci · pneus ${F1.TYRES[p.nextTyre].label.toLowerCase()}` : 'Arrêt annulé');
+    updatePitPanel();
+  }
+  function chooseTyre(t) {
+    const p = S.race && S.race.player;
+    if (!p || !(p.pitReq || (p.pit && p.pit.phase === 'in'))) return;
+    p.nextTyre = t;
+    updatePitPanel();
+  }
+  function updatePitPanel() {
+    const p = S.race && S.race.player;
+    const show = !!p && (p.pitReq || (p.pit && p.pit.phase === 'in'));
+    $('tp-pit').classList.toggle('hidden', !show);
+    const btn = document.getElementById('touch-pit');
+    if (btn) btn.classList.toggle('on', !!(p && p.pitReq));
+    document.querySelectorAll('#tp-pit [data-tyre]').forEach((b) => b.classList.toggle('sel', !!p && b.dataset.tyre === p.nextTyre));
+  }
+  document.querySelectorAll('#tp-pit [data-tyre]').forEach((b) => b.addEventListener('click', () => chooseTyre(b.dataset.tyre)));
+
+  // ---------- Bandeaux télé ----------
+  const bannerQ = [];
+  let bannerT = 0, battleCd = 6;
+  function tv(kicker, main, sub, cls) {
+    if (bannerQ.length > 4) bannerQ.shift();
+    bannerQ.push({ kicker, main, sub, cls });
+  }
+  function tvTick(dt) {
+    const el = $('tv-banner');
+    if (bannerT > 0) {
+      bannerT -= dt;
+      if (bannerT <= 0) el.classList.remove('show');
+      return;
+    }
+    if (bannerT > -0.4) { bannerT -= dt; return; } // petite pause entre deux bandeaux
+    const b = bannerQ.shift();
+    if (!b) return;
+    el.className = 'tv-banner ' + (b.cls || '');
+    el.innerHTML = '<span class="bn-kicker"></span><span class="bn-main"></span><span class="bn-sub"></span>';
+    el.querySelector('.bn-kicker').textContent = b.kicker;
+    el.querySelector('.bn-main').textContent = b.main;
+    el.querySelector('.bn-sub').textContent = b.sub || '';
+    void el.offsetWidth;
+    el.classList.add('show');
+    bannerT = 3.6;
+  }
+  // Intervalle avec la voiture qui précède (secondes), ou nombre de tours de retard
+  function interval(st, i) {
+    const c = st[i], a = st[i - 1];
+    if (!a) return null;
+    if (c.finished && a.finished) return c.finishTime - a.finishTime;
+    return Math.max(0, c.gap - a.gap);
+  }
+  function battles(race, dt) {
+    battleCd -= dt;
+    if (battleCd > 0) return;
+    battleCd = 9;
+    const st = race.standings();
+    const p = race.player, me = st.indexOf(p);
+    const cands = [];
+    for (let i = 1; i < st.length; i++) {
+      if (st[i].finished || st[i].pit || st[i - 1].pit) continue;
+      const iv = interval(st, i);
+      if (iv != null && iv < 0.6 && st[i].wrap === st[i - 1].wrap) cands.push({ i, iv, near: Math.abs(i - me) });
+    }
+    if (!cands.length) return;
+    cands.sort((x, y) => x.near - y.near || x.i - y.i);
+    const b = cands[0];
+    tv(`Duel pour la P${b.i}`, `${st[b.i - 1].code}  ▸  ${st[b.i].code}`, `Écart : ${b.iv.toFixed(1)} s`, 'yellow');
+  }
 
   // ---------- État ----------
   const renderer = new F1.Renderer($('game'));
@@ -173,8 +254,21 @@
     const o = S.opts;
     const track = F1.getTrack(o.gp);
     const set = F1.Settings.get();
-    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists });
+    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists, tyreWear: set.tyreWear, playerTyre: o.playerTyre });
     S.aeroWanted = false; S.prevAero = false; steerIn = 0;
+    bannerQ.length = 0; bannerT = 0; battleCd = 8;
+    $('tv-banner').className = 'tv-banner';
+    const isRace = o.mode === 'race';
+    $('tv-lap').classList.toggle('hidden', !isRace);
+    $('tyre-panel').classList.toggle('hidden', !isRace || S.race.wearMul === 0 && S.race.weather !== 'rain');
+    const tp = document.getElementById('touch-pit');
+    if (tp) tp.classList.toggle('hidden', !isRace);
+    $('tv-wx').textContent = { dry: '☀️', cloudy: '☁️', rain: '🌧️' }[S.race.weather];
+    updatePitPanel();
+    if (isRace && S.race.player) {
+      const p = S.race.player;
+      tv(`Sur la grille · P${p.grid}`, p.name, `${p.team.name} · n° ${p.num} · pneus ${F1.TYRES[p.tyre].label.toLowerCase()}`, 'green');
+    }
     $('touch-aero').classList.toggle('hidden', set.aero !== 'manual');
     S.scene2d = F1.buildScene(track);
     renderer.setScene(S.scene2d);
@@ -226,6 +320,7 @@
       time: c.finished ? c.finishTime : null,
       gap: c.finished && winner ? c.finishTime - winner.finishTime : null,
       lapsDown: c.finished ? 0 : Math.max(0, (st[0].wrap - c.wrap)),
+      stops: c.stops,
     }));
     if (abandon) {
       const me = order.find((o) => o.id === race.player.id);
@@ -349,14 +444,34 @@
     aeroEl.textContent = p.aeroOpen ? 'AÉRO X' : 'AÉRO Z';
     aeroEl.className = 'aero ' + (p.aeroOpen ? 'open' : zone && race.aeroMode === 'manual' ? 'ready' : '');
     $('hud-boost').classList.toggle('on', !!p.boosting);
+    if (!quali) {
+      const T = F1.TYRES[p.tyre];
+      const badge = $('tp-badge');
+      badge.textContent = T.short;
+      badge.className = 'tyre-badge ' + p.tyre.toLowerCase();
+      const w = Math.min(100, Math.round(p.wear * 100));
+      $('tp-wear-fill').style.width = w + '%';
+      $('tp-wear-fill').style.background = w > 85 ? '#e10600' : w > 60 ? '#ffd60a' : '#3ddc84';
+      $('tp-wear-val').textContent = p.pit ? (p.pit.phase === 'stop' ? 'Arrêt…' : 'Stands') : `${w} %`;
+      const lead = race.standings()[0];
+      $('tv-lap-txt').textContent = lead.finished ? 'ARRIVÉE' : `TOUR ${Math.max(1, Math.min(race.laps, lead.wrap + 1))}/${race.laps}`;
+    }
 
     if (!quali && (force || S.hudTimer <= 0)) {
       S.hudTimer = 0.3;
       const st = race.standings();
       const me = st.indexOf(p);
-      const show = new Set([0, 1, 2]);
-      for (let i = me - 3; i <= me + 3; i++) if (i >= 0 && i < st.length) show.add(i);
+      // Tour de classement : tout le monde si l'écran est assez haut, sinon le haut + autour du joueur
+      const rows = Math.max(8, Math.floor((window.innerHeight - 160) / 23));
+      const show = new Set();
+      if (st.length <= rows) st.forEach((_, i) => show.add(i));
+      else {
+        for (let i = 0; i < Math.min(5, rows - 6); i++) show.add(i);
+        for (let i = me - 2; i <= me + 2; i++) if (i >= 0 && i < st.length) show.add(i);
+        for (let i = 0; show.size < rows && i < st.length; i++) show.add(i);
+      }
       const lb = $('leaderboard');
+      lb.className = 'panel tower';
       lb.innerHTML = '';
       let prev = -1;
       [...show].sort((a, b) => a - b).forEach((i) => {
@@ -374,9 +489,12 @@
         if (i === 0) gap = c.finished ? 'Arrivé' : 'Leader';
         else if (race.started) {
           const down = st[0].wrap - c.wrap - (st[0].idx < c.idx ? 1 : 0);
-          gap = down >= 1 && !c.finished ? `+${down} t.` : `+${Math.max(0, c.gap).toFixed(1)}`;
+          const iv = interval(st, i);
+          gap = down >= 1 && !c.finished ? `+${down} T` : `+${(iv || 0).toFixed(1)}`;
         }
-        li.innerHTML = `<span class="p">${i + 1}</span><span class="sw" style="background:${c.team.color}"></span><span class="n"></span><span class="g">${gap}</span>`;
+        const T = F1.TYRES[c.tyre];
+        const tag = c.pit ? '<span class="pit">STAND</span>' : race.bestLap.car === c ? '<span class="fl">⏱</span>' : '';
+        li.innerHTML = `<span class="p">${i + 1}</span><span class="sw" style="background:${c.team.color}"></span><span class="n"></span>${tag}<span class="g">${gap}</span><span class="tyre-badge tb ${c.tyre.toLowerCase()}">${T.short}</span><span class="st">${c.stops || ''}</span>`;
         li.querySelector('.n').textContent = c.code;
         lb.appendChild(li);
       });
@@ -443,9 +561,22 @@
             S.state = 'done';
             qualiDone(ev.time);
           }
-        } else if (ev.type === 'fastest' && ev.car === p) toast(`Meilleur tour : ${fmt(ev.time)}`, 'purple');
-        else if (ev.type === 'lap' && ev.car === p) toast(ev.lap === race.laps ? 'Dernier tour !' : `Tour ${ev.lap} · ${fmt(ev.time)}`);
-        else if (ev.type === 'finish' && ev.car === p) {
+        } else if (ev.type === 'fastest') {
+          if (ev.car === p) toast(`Meilleur tour : ${fmt(ev.time)}`, 'purple');
+          if (race.time > 5) tv('Meilleur tour en course', `${ev.car.name}`, `${ev.car.team.name} · ${fmt(ev.time)}`, 'purple');
+        } else if (ev.type === 'lap') {
+          if (ev.car === p) toast(ev.lap === race.laps ? 'Dernier tour !' : `Tour ${ev.lap} · ${fmt(ev.time)}`);
+          if (ev.lap === race.laps && race.standings()[0] === ev.car) tv('Course', 'Dernier tour', `${ev.car.name} mène la course`);
+        } else if (ev.type === 'pitIn') {
+          if (ev.car === p) { toast('Entrée aux stands · limitation à 80 km/h'); updatePitPanel(); }
+        } else if (ev.type === 'pit') {
+          const T = F1.TYRES[ev.tyre];
+          const pos = race.standings().indexOf(ev.car) + 1;
+          if (ev.car === p) updatePitPanel();
+          if (ev.car === p || pos <= 10) tv(`Arrêt au stand · P${pos}`, ev.car.name, `Immobilisé ${ev.stationary.toFixed(1)} s · pneus ${T.label.toLowerCase()}`, ev.car === p ? 'green' : '');
+        } else if (ev.type === 'finish' && race.finishOrder.length === 1 && ev.car !== p) {
+          tv('Drapeau à damier', `${ev.car.name} gagne`, ev.car.team.name, 'green');
+        } else if (ev.type === 'finish' && ev.car === p) {
           banner(ev.pos === 1 ? 'Victoire !' : `Arrivée : P${ev.pos}`, ev.pos === 1 ? 'go' : '');
           S.finishTimer = 3;
           audio.beep(660, 0.3, 0.15);
@@ -453,6 +584,8 @@
         }
       }
       race.events.length = 0;
+      if (race.mode === 'race' && race.started && S.state !== 'paused') { battles(race, dt); }
+      if (S.state !== 'paused') tvTick(dt);
 
       if (S.state === 'run' && race.mode === 'race' && p) {
         if (p.finished) {
