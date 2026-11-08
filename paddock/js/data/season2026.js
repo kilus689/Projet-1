@@ -53,10 +53,10 @@
   // perf : aéro, châssis, fiabilité (0-100). Le moteur vient du motoriste.
   // budget en millions d'euros (mode écurie).
   F1.TEAMS2026 = [
-    { id: 'mclaren', name: 'McLaren', color: '#ff8000', color2: '#1d2b3a', engine: 'mercedes', aero: 90, chassis: 89, reliability: 88, budget: 150, prestige: 92 },
+    { id: 'mclaren', name: 'McLaren', color: '#ff8000', color2: '#151515', engine: 'mercedes', aero: 90, chassis: 89, reliability: 88, budget: 150, prestige: 92 },
     { id: 'mercedes', name: 'Mercedes', color: '#00d2be', color2: '#1a1a1a', engine: 'mercedes', aero: 90, chassis: 90, reliability: 90, budget: 150, prestige: 94 },
-    { id: 'ferrari', name: 'Ferrari', color: '#e8002d', color2: '#ffeb3b', engine: 'ferrari', aero: 88, chassis: 87, reliability: 85, budget: 150, prestige: 98 },
-    { id: 'redbull', name: 'Red Bull Racing', color: '#1e3a8a', color2: '#e8002d', engine: 'rbford', aero: 89, chassis: 87, reliability: 83, budget: 150, prestige: 93 },
+    { id: 'ferrari', name: 'Ferrari', color: '#e8002d', color2: '#151515', engine: 'ferrari', aero: 88, chassis: 87, reliability: 85, budget: 150, prestige: 98 },
+    { id: 'redbull', name: 'Red Bull Racing', color: '#1b2a5e', color2: '#d71920', engine: 'rbford', aero: 89, chassis: 87, reliability: 83, budget: 150, prestige: 93 },
     { id: 'aston', name: 'Aston Martin', color: '#00594f', color2: '#cedc00', engine: 'honda', aero: 84, chassis: 82, reliability: 80, budget: 140, prestige: 82 },
     { id: 'williams', name: 'Williams', color: '#1868db', color2: '#0b1a33', engine: 'mercedes', aero: 81, chassis: 82, reliability: 85, budget: 120, prestige: 80 },
     { id: 'alpine', name: 'Alpine', color: '#0090ff', color2: '#ff87bc', engine: 'mercedes', aero: 79, chassis: 79, reliability: 84, budget: 125, prestige: 76 },

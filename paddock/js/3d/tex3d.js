@@ -323,33 +323,142 @@
   };
 
   // Livrée d'une écurie : atlas de 3 bandes (coque / capot moteur / pontons)
+  // ---------- Livrées par écurie (zones de couleur, sans logos) ----------
+  // Bandes de l'atlas : 0 = coque + nez (u : 0 = pointe du nez → 1 = arrière du cockpit),
+  // 1 = capot moteur (u : 0 = prise d'air → 1 = arrière), 2 = pontons (u : 0 = entrée d'air → 1 = arrière).
+  // v (autour de la pièce) : 0 dessous, 0.25 flanc droit, 0.5 dessus, 0.75 flanc gauche, 1 dessous.
+  const CARB = '#17181b';
+  const TOP = [0.3, 0.7], UPPER = [0.18, 0.82], LOW = [[0, 0.17], [0.83, 1]];
+  const DESIGNS = {
+    // Bleu nuit, nez jaune, grand motif jaune/rouge à l'avant du capot moteur
+    redbull: (z) => {
+      z.all('#1b2a5e'); z.shade(0.25); z.lower(CARB);
+      z.box(0, 0, 0.09, ...UPPER, '#f5b61c'); z.box(0, 0.09, 0.12, ...UPPER, '#d71920');
+      z.box(1, 0, 0.3, ...TOP, '#f5b61c'); z.box(1, 0.04, 0.24, 0.4, 0.6, '#d71920');
+      z.stripe(2, 0.55, '#d71920', 0.02);
+    },
+    // Blanc, bandes bleu roi, nez jaune
+    racingbulls: (z) => {
+      z.all('#f4f4f2'); z.lower(CARB);
+      z.box(0, 0, 0.08, ...UPPER, '#f5b61c');
+      z.stripe(0, 0.27, '#1d3fa8', 0.04); z.stripe(0, 0.73, '#1d3fa8', 0.04);
+      z.box(1, 0, 0.26, ...TOP, '#f5b61c'); z.box(1, 0.05, 0.2, 0.42, 0.58, '#d71920');
+      z.box(2, 0, 1, 0.12, 0.28, '#1d3fa8'); z.box(2, 0, 1, 0.72, 0.88, '#1d3fa8');
+    },
+    // Rouge, avant du capot moteur blanc, pontons rouges à bas noir
+    ferrari: (z) => {
+      z.all('#d40000'); z.shade(0.2); z.lower(CARB);
+      z.box(1, 0, 0.45, ...UPPER, '#f2f2f2'); z.stripe(1, 0.5, '#d40000', 0.04);
+      z.box(2, 0.7, 1, 0, 1, CARB);
+    },
+    // Bleu, nez et dos du cockpit roses, rose sur l'arrière du capot
+    alpine: (z) => {
+      z.all('#1f6fd1'); z.shade(0.2); z.lower(CARB);
+      z.box(0, 0, 0.62, 0.38, 0.62, '#f19ec6');
+      z.box(1, 0.55, 1, ...TOP, '#f19ec6');
+      z.box(2, 0, 0.15, ...UPPER, '#f19ec6');
+    },
+    // Bleu roi, flancs bleu clair et blanc, dessous noir
+    williams: (z) => {
+      z.all('#1e5bd8'); z.lower(CARB);
+      z.box(2, 0, 0.5, 0.15, 0.3, '#f2f2f2'); z.box(2, 0, 0.5, 0.7, 0.85, '#f2f2f2');
+      z.box(2, 0.5, 1, 0.15, 0.3, '#3fb2e6'); z.box(2, 0.5, 1, 0.7, 0.85, '#3fb2e6');
+      z.stripe(0, 0.3, '#3fb2e6', 0.015); z.stripe(0, 0.7, '#3fb2e6', 0.015);
+    },
+    // Noir carbone, dos argenté, filets turquoise, bandes argent sur les pontons
+    mercedes: (z) => {
+      z.all('#141517'); z.carbonWeave();
+      z.box(0, 0, 0.85, 0.36, 0.64, '#e6e7e8');
+      z.stripe(0, 0.35, '#00d2be', 0.018); z.stripe(0, 0.65, '#00d2be', 0.018);
+      for (let i = 0; i < 4; i++) z.diag(2, 0.12 + i * 0.13, 0.06, '#e6e7e8');
+      z.stripe(2, 0.3, '#00d2be', 0.02); z.stripe(2, 0.7, '#00d2be', 0.02);
+    },
+    // Noir et blanc, capot moteur asymétrique, dégradé blanc sur les pontons
+    cadillac: (z) => {
+      z.all('#121212'); z.carbonWeave();
+      z.box(1, 0, 1, 0, 0.5, '#f2f2f2');
+      z.stripe(0, 0.32, '#f2f2f2', 0.025); z.stripe(0, 0.68, '#f2f2f2', 0.025);
+      z.fade(2, 0, 0.6, '#f2f2f2');
+    },
+    // Vert, filets jaune citron, bas noir
+    aston: (z) => {
+      z.all('#00665a'); z.shade(0.25); z.lower(CARB);
+      z.stripe(0, 0.33, '#cedc00', 0.015); z.stripe(0, 0.67, '#cedc00', 0.015);
+      z.dots(2, 0.15, 0.45, '#cedc00');
+      z.box(2, 0.55, 1, 0, 1, CARB);
+    },
+    // Gris clair, haut des pontons et flancs du capot rouges, dessus du capot noir
+    audi: (z) => {
+      z.all('#d9d9d9'); z.shade(0.15); z.lower(CARB);
+      z.box(1, 0, 1, ...TOP, '#151515'); z.box(1, 0, 0.55, 0.18, 0.3, '#e1001a'); z.box(1, 0, 0.55, 0.7, 0.82, '#e1001a');
+      z.box(2, 0, 0.35, 0, 1, '#e1001a');
+    },
+    // Papaye, pontons noirs à bandes papaye, touches turquoise près du cockpit
+    mclaren: (z) => {
+      z.all('#ff8000'); z.lower(CARB);
+      z.box(0, 0.55, 0.85, 0.3, 0.42, '#00a19c'); z.box(0, 0.55, 0.85, 0.58, 0.7, '#00a19c');
+      z.box(1, 0, 1, 0, 1, '#151515'); z.box(1, 0, 0.25, ...TOP, '#00a19c'); z.box(1, 0.35, 1, 0.18, 0.26, '#ff8000'); z.box(1, 0.35, 1, 0.74, 0.82, '#ff8000');
+      z.box(2, 0, 1, 0, 1, '#151515'); z.diag(2, 0.25, 0.1, '#ff8000'); z.diag(2, 0.55, 0.1, '#ff8000');
+    },
+    // Blanc, bas noir, filet rouge
+    haas: (z) => {
+      z.all('#ececec'); z.lower(CARB);
+      z.stripe(0, 0.3, '#da1e28', 0.02); z.stripe(0, 0.7, '#da1e28', 0.02);
+      z.box(2, 0.6, 1, 0, 1, CARB); z.box(1, 0, 1, ...TOP, '#1a1a1a');
+    },
+  };
+
   X.livery = function (team, num) {
-    const key = 'liv' + team.color + team.color2 + num;
+    const key = 'liv' + (team.id || '') + team.color + team.color2 + num;
     return once(key, () => {
       const W = 1024, B = 256, c = canvas(W, B * 3);
       const g = c.getContext('2d');
       const band = (k) => B * (2 - k); // la bande 0 est en bas (v faible)
-      for (let k = 0; k < 3; k++) {
-        const y0 = band(k);
-        g.fillStyle = team.color; g.fillRect(0, y0, W, B);
-        // Léger dégradé (reflet de la peinture)
-        const gr = g.createLinearGradient(0, y0, 0, y0 + B);
-        gr.addColorStop(0, 'rgba(0,0,0,0.25)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.08)'); gr.addColorStop(1, 'rgba(0,0,0,0.25)');
-        g.fillStyle = gr; g.fillRect(0, y0, W, B);
-        // Bande d'accent en diagonale
-        g.save();
-        g.beginPath(); g.rect(0, y0, W, B); g.clip();
-        g.fillStyle = team.color2;
-        g.beginPath();
-        const off = k === 0 ? 520 : k === 1 ? 120 : 300;
-        g.moveTo(off, y0 + B); g.lineTo(off + 140, y0); g.lineTo(off + 230, y0); g.lineTo(off + 90, y0 + B);
-        g.fill();
-        g.fillRect(0, y0 + B * 0.47, W, B * 0.035);
-        // Filets fins sur les flancs (style « pinstripe »)
-        g.globalAlpha = 0.9;
-        for (const v of [0.2, 0.26, 0.74, 0.8]) g.fillRect(W * 0.08, y0 + B * v, W * 0.84, B * 0.012);
-        g.globalAlpha = 1;
-        g.restore();
+      const Y = (k, v) => band(k) + B * (1 - v);
+      const all = (k) => (k == null ? [0, 1, 2] : [k]);
+      const z = {
+        all(col) { g.fillStyle = col; g.fillRect(0, 0, W, B * 3); },
+        box(k, u0, u1, v0, v1, col) { g.fillStyle = col; g.fillRect(W * u0, Y(k, v1), W * (u1 - u0), B * (v1 - v0)); },
+        lower(col) { for (const k of all()) for (const [a, b] of LOW) this.box(k, 0, 1, a, b, col); },
+        stripe(k, v, col, h) { this.box(k, 0, 1, v - h / 2, v + h / 2, col); },
+        diag(k, u, w, col) { // bande oblique sur les deux flancs
+          g.fillStyle = col;
+          for (const [v0, v1] of [[0.12, 0.42], [0.58, 0.88]]) {
+            g.beginPath();
+            g.moveTo(W * u, Y(k, v0)); g.lineTo(W * (u + w), Y(k, v0)); g.lineTo(W * (u + w + 0.08), Y(k, v1)); g.lineTo(W * (u + 0.08), Y(k, v1));
+            g.fill();
+          }
+        },
+        fade(k, u0, u1, col) {
+          const gr = g.createLinearGradient(W * u0, 0, W * u1, 0);
+          gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+          g.fillStyle = gr; g.fillRect(W * u0, Y(k, 0.85), W * (u1 - u0), B * 0.7);
+        },
+        dots(k, u0, u1, col) {
+          g.fillStyle = col;
+          for (let u = u0; u < u1; u += 0.012) for (const vc of [0.3, 0.7]) {
+            const sz = 5 * (1 - (u - u0) / (u1 - u0));
+            for (let dv = -0.08; dv <= 0.08; dv += 0.04) g.fillRect(W * u, Y(k, vc + dv), sz, sz);
+          }
+        },
+        shade(a) {
+          for (const k of all()) {
+            const y0 = band(k);
+            const gr = g.createLinearGradient(0, y0, 0, y0 + B);
+            gr.addColorStop(0, `rgba(0,0,0,${a})`); gr.addColorStop(0.5, 'rgba(255,255,255,0.05)'); gr.addColorStop(1, `rgba(0,0,0,${a})`);
+            g.fillStyle = gr; g.fillRect(0, y0, W, B);
+          }
+        },
+        carbonWeave() {
+          for (let y = 0; y < B * 3; y += 6) for (let x = (y / 6) % 2 ? 0 : 6; x < W; x += 12) { g.fillStyle = 'rgba(255,255,255,0.035)'; g.fillRect(x, y, 6, 6); }
+        },
+      };
+      const design = DESIGNS[team.id];
+      if (design) design(z);
+      else {
+        // Écurie créée par le joueur : couleur principale, bande secondaire et filets
+        z.all(team.color); z.shade(0.25); z.lower(CARB);
+        for (const k of [0, 1, 2]) { z.stripe(k, 0.5, team.color2, 0.035); z.diag(k, 0.4, 0.08, team.color2); }
       }
       // Numéros (orientés pour être lisibles de chaque côté)
       const numTxt = String(num);
