@@ -71,8 +71,42 @@
     return c;
   }
 
+  // Photo studio 3D de la voiture (dessin 2D en attendant le rendu, ou si la 3D est indisponible)
+  function carPhoto(team, w, hgt, cls) {
+    const box = h('span', { class: 'car-photo' + (cls ? ' ' + cls : '') });
+    box.appendChild(carCanvas(team, w, hgt));
+    if (F1.CarPhoto) {
+      F1.CarPhoto.get(team).then((url) => {
+        if (!url) return;
+        const img = h('img', { src: url, alt: team.name, draggable: 'false' });
+        box.textContent = '';
+        box.appendChild(img);
+      });
+    }
+    return box;
+  }
+
+  function portrait(d, team, size, cls) {
+    const c = h('canvas', { class: 'portrait' + (cls ? ' ' + cls : ''), width: size * 2, height: size * 2 });
+    if (F1.Portraits) {
+      F1.Portraits.draw(c, d, team);
+      // la police du jeu peut arriver après le premier dessin
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => F1.Portraits.draw(c, d, team));
+    }
+    return c;
+  }
+
   function teamCard(team, opts) {
     const drivers = (opts && opts.drivers) || [];
+    if (opts && opts.big) {
+      return h('button', { class: 'team-card big' + (opts.selected ? ' selected' : ''), style: `--team:${team.color}`, onclick: opts.onclick },
+        carPhoto(team, 160, 90),
+        h('span', { class: 'tc-body' },
+          h('span', { class: 'tc-name' }, team.name),
+          h('span', { class: 'tc-meta' }, `Moteur ${F1.ENGINES[team.engine].name} · ${stars(C.carRating(team))}`),
+          drivers.length ? h('span', { class: 'tc-meta' }, drivers.map((d) => d.last).join(' · ')) : null,
+          opts.extra ? h('span', { class: 'tc-meta' }, opts.extra) : null));
+    }
     return h('button', { class: 'team-card' + (opts && opts.selected ? ' selected' : ''), style: `--team:${team.color}`, onclick: opts && opts.onclick },
       carCanvas(team, 70, 44),
       h('span', { class: 'tc-body' },
@@ -84,6 +118,7 @@
 
   function driverCard(d, team, opts) {
     return h('button', { class: 'driver-card' + (opts && opts.selected ? ' selected' : ''), style: `--team:${team ? team.color : '#888'}`, onclick: opts && opts.onclick },
+      portrait(d, team, 56, 'dc-photo'),
       h('span', { class: 'dc-num' }, String(d.num)),
       h('span', { class: 'dc-body' },
         h('span', { class: 'dc-name' }, `${d.flag} ${d.first} `, h('b', null, d.last.toUpperCase())),
@@ -168,10 +203,10 @@
   }
 
   function quickTeam() {
-    const g = h('div', { class: 'team-grid' });
+    const g = h('div', { class: 'team-grid big' });
     for (const t of F1.TEAMS2026) {
       g.appendChild(teamCard(t, {
-        selected: t.id === qs.team,
+        selected: t.id === qs.team, big: true,
         drivers: F1.DRIVERS2026.filter((d) => d.team === t.id),
         onclick: () => { qs.team = t.id; saveQs(); quickDriver(); },
       }));
@@ -185,13 +220,14 @@
     const g = h('div', { class: 'driver-pick' });
     for (const d of F1.DRIVERS2026.filter((x) => x.team === t.id)) {
       g.appendChild(h('button', { class: 'driver-big' + (d.id === qs.driver ? ' selected' : ''), style: `--team:${t.color}`, onclick: () => { qs.driver = d.id; saveQs(); quickSettings(); } },
+        portrait(d, t, 150, 'db-photo'),
         h('span', { class: 'db-num' }, String(d.num)),
         h('span', { class: 'db-flag' }, d.flag),
         h('span', { class: 'db-first' }, d.first),
         h('span', { class: 'db-last' }, d.last.toUpperCase()),
         h('span', { class: 'db-meta' }, `Vitesse ${d.pace} · Course ${d.craft}`)));
     }
-    show(card(t.name, backBtn(quickTeam, 'Écuries'), stepper(2), h('h3', null, 'Choisissez votre pilote'), carCanvas(t, 160, 100), g));
+    show(card(t.name, backBtn(quickTeam, 'Écuries'), stepper(2), h('h3', null, 'Choisissez votre pilote'), carPhoto(t, 320, 180, 'hero'), g));
   }
 
   // Bloc de réglages partagé (course rapide, carrière, accueil)
@@ -239,7 +275,7 @@
   }
 
   function settingsScreen(back) {
-    show(card('Aides et commandes', backBtn(back), ...settingsPanel(() => settingsScreen(back), {}), liveryPanel(() => settingsScreen(back))));
+    show(card('Aides et commandes', backBtn(back), ...settingsPanel(() => settingsScreen(back), {}), liveryPanel(() => settingsScreen(back)), photoPanel(() => settingsScreen(back))));
   }
 
   // Livrées personnalisées : images du joueur, gardées uniquement sur cet appareil
@@ -269,6 +305,32 @@
         a.download = 'gabarit-livree-paddock2026.png';
         document.body.appendChild(a); a.click(); a.remove();
       } }, '⬇ Télécharger le gabarit 4K'),
+      h('div', { class: 'liv-list' }, rows));
+  }
+
+  // Photos des pilotes : importées par le joueur, gardées uniquement sur cet appareil
+  function photoPanel(rerender) {
+    const P = F1.Portraits;
+    if (!P || !F1.Liveries) return null;
+    const rows = F1.DRIVERS2026.map((d) => {
+      const t = teamById(d.team);
+      const input = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', style: 'display:none', onchange: async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        try { await P.setPhoto(d.id, f); } catch (err) { alert('Image illisible.'); }
+        rerender();
+      } });
+      return h('div', { class: 'liv-row', style: `--team:${t ? t.color : '#888'}` },
+        portrait(d, t, 40, 'liv-photo'),
+        h('span', { class: 'liv-name' }, `${d.first} ${d.last}`),
+        h('span', { class: 'liv-state' }, P.hasPhoto(d.id) ? '✔ Photo importée' : 'Portrait du jeu'),
+        h('button', { class: 'small-btn', onclick: () => input.click() }, 'Importer'),
+        P.hasPhoto(d.id) ? h('button', { class: 'small-btn danger', onclick: async () => { await P.removePhoto(d.id); rerender(); } }, 'Retirer') : null,
+        input);
+    });
+    return h('section', null,
+      h('h3', null, 'Photos des pilotes'),
+      h('p', { class: 'hint' }, "Par défaut, chaque pilote a un portrait illustré (casque et combinaison aux couleurs de son écurie). Vous pouvez importer une photo depuis votre appareil : elle reste sur cet appareil et n'est jamais publiée."),
       h('div', { class: 'liv-list' }, rows));
   }
 
@@ -415,9 +477,10 @@
   }
 
   function pickExistingTeam() {
-    const g = h('div', { class: 'team-grid' });
+    const g = h('div', { class: 'team-grid big' });
     for (const t of F1.TEAMS2026) {
       g.appendChild(teamCard(t, {
+        big: true,
         drivers: F1.DRIVERS2026.filter((d) => d.team === t.id),
         extra: `Budget ${t.budget} M€`,
         onclick: () => { wiz.team = { id: t.id }; wiz.driver = null; settings(pickExistingTeam); },
