@@ -254,7 +254,7 @@
     const o = S.opts;
     const track = F1.getTrack(o.gp);
     const set = F1.Settings.get();
-    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists, tyreWear: set.tyreWear, playerTyre: o.playerTyre });
+    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists, tyreWear: set.tyreWear, damage: set.damage, playerTyre: o.playerTyre });
     S.aeroWanted = false; S.prevAero = false; steerIn = 0;
     bannerQ.length = 0; bannerT = 0; battleCd = 8;
     $('tv-banner').className = 'tv-banner';
@@ -452,6 +452,12 @@
       const w = Math.min(100, Math.round(p.wear * 100));
       $('tp-wear-fill').style.width = w + '%';
       $('tp-wear-fill').style.background = w > 85 ? '#e10600' : w > 60 ? '#ffd60a' : '#3ddc84';
+      const D = p.dmg;
+      if (D) for (const k of ['fw', 'sus', 'rw']) {
+        const v = D[k], el = $('tp-dmg-' + k);
+        el.className = v >= 0.5 ? 'bad' : v >= 0.15 ? 'warn' : v > 0.02 ? 'light' : '';
+        el.title = `${F1.DAMAGE_PARTS[k]} : ${Math.round(v * 100)} %`;
+      }
       $('tp-wear-val').textContent = p.pit ? (p.pit.phase === 'stop' ? 'Arrêt…' : 'Stands') : `${w} %`;
       const lead = race.standings()[0];
       $('tv-lap-txt').textContent = lead.finished ? 'ARRIVÉE' : `TOUR ${Math.max(1, Math.min(race.laps, lead.wrap + 1))}/${race.laps}`;
@@ -567,6 +573,16 @@
         } else if (ev.type === 'lap') {
           if (ev.car === p) toast(ev.lap === race.laps ? 'Dernier tour !' : `Tour ${ev.lap} · ${fmt(ev.time)}`);
           if (ev.lap === race.laps && race.standings()[0] === ev.car) tv('Course', 'Dernier tour', `${ev.car.name} mène la course`);
+        } else if (ev.type === 'damage') {
+          if (ev.car === p) {
+            const name = F1.DAMAGE_PARTS[ev.part], pc = Math.round(ev.level * 100);
+            if (ev.level >= 0.9) toast(`${name} détruit${ev.part === 'sus' ? 'e' : ''} !${ev.part !== 'sus' ? ' Rentre au stand' : ''}`, 'red');
+            else if (ev.level >= 0.5) toast(`${name} très endommagé${ev.part === 'sus' ? 'e' : ''} (${pc} %)${ev.part !== 'sus' ? ' · arrêt conseillé' : ''}`, 'red');
+            else toast(`${name} endommagé${ev.part === 'sus' ? 'e' : ''} (${pc} %)`);
+            audio.beep(180, 0.15, 0.12);
+          } else if (ev.level >= 0.5 && race.mode === 'race') {
+            tv('Incident', ev.car.name, `${F1.DAMAGE_PARTS[ev.part]} endommagé${ev.part === 'sus' ? 'e' : ''}`, '');
+          }
         } else if (ev.type === 'pitIn') {
           if (ev.car === p) { toast('Entrée aux stands · limitation à 80 km/h'); updatePitPanel(); }
         } else if (ev.type === 'pit') {

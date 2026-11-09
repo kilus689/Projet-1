@@ -256,6 +256,8 @@
       h('section', null, h('h3', null, 'Aéro active'), seg(Object.entries(S.AERO), st.aero, (v) => { S.set({ aero: v }); rerender(); }))));
     parts.push(h('div', { class: 'row' },
       h('section', null, h('h3', null, 'Usure des pneus'), seg(Object.entries(S.WEAR), st.tyreWear, (v) => { S.set({ tyreWear: v }); rerender(); })),
+      h('section', null, h('h3', null, 'Dégâts'), seg(Object.entries(S.DAMAGE), st.damage, (v) => { S.set({ damage: v }); rerender(); }),
+        h('p', { class: 'hint' }, "Toucher un mur ou une autre voiture abîme l'aileron avant, l'aileron arrière ou la suspension : la voiture tourne moins bien et va moins vite. Les ailerons sont changés à l'arrêt au stand (quelques secondes de plus), la suspension non.")),
       h('section', null, h('h3', null, 'Pneus de départ'), seg([['S', '🔴 Tendres'], ['M', '🟡 Médiums'], ['H', '⚪ Durs']], st.startTyre, (v) => { S.set({ startTyre: v }); rerender(); }))));
     parts.push(h('p', { class: 'hint' }, 'Arrêts au stand : bouton STAND / touche B pour rentrer au prochain passage, puis choix de la gomme (T, M, D, I ou touches 1 à 4). Usure calculée sur la distance de la course : une course courte demande quand même un arrêt. Sous la pluie, il faut des pneus intermédiaires (I).'));
     parts.push(h('p', { class: 'hint' }, 'Batterie : elle se vide en accélérant et se recharge au freinage. ⚡ / touche E : boost (plus de puissance, vide la batterie plus vite). Aéro active manuelle : bouton AÉRO / Espace dans les lignes droites ; elle se referme au freinage.'));
