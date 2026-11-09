@@ -148,7 +148,7 @@
       for (const v of this.cars.values()) this.scene.remove(v.g);
       this.cars.clear();
       race.cars.forEach((c, k) => {
-        const m = X.makeCar(c.team, c.num || k + 1, c.isPlayer, race.weather === 'rain' ? 3 : (c.num || k) % 3);
+        const m = X.makeCar(c.team, c.num || k + 1, c.isPlayer, race.weather === 'rain' ? 3 : (c.num || k) % 3, c.code);
         this.scene.add(m.g);
         this.cars.set(c, m);
       });

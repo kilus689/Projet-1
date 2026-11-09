@@ -313,8 +313,23 @@
     return common;
   }
 
+  // Casque aux couleurs du pilote (motif partagé avec les portraits)
+  const helmCache = new Map();
+  function helmetMat(team, code, isPlayer) {
+    const key = (code || '') + team.id + (isPlayer ? 'P' : '');
+    if (helmCache.has(key)) return helmCache.get(key);
+    let m;
+    if (code && F1.Helmets) {
+      const tex = new T.CanvasTexture(F1.Helmets.canvas(code, team));
+      tex.colorSpace = T.SRGBColorSpace;
+      m = new T.MeshPhysicalMaterial({ map: tex, roughness: 0.25, clearcoat: 1 });
+    } else m = new T.MeshPhysicalMaterial({ color: isPlayer ? 0xffffff : team.color2, roughness: 0.25, clearcoat: 1 });
+    helmCache.set(key, m);
+    return m;
+  }
+
   // ---------- Construction d'une voiture ----------
-  X.makeCar = function (team, num, isPlayer, compound) {
+  X.makeCar = function (team, num, isPlayer, compound, code) {
     const S = shared || buildShared();
     const C = commonMats();
     const M = materials(team, num);
@@ -328,7 +343,7 @@
     add(S.carbon, C.carbon, true);
     add(S.accent, M.accent, true);
     const helmet = new T.Group();
-    helmet.add(new T.Mesh(S.helmet, new T.MeshPhysicalMaterial({ color: isPlayer ? 0xffffff : team.color2, roughness: 0.25, clearcoat: 1 })));
+    helmet.add(new T.Mesh(S.helmet, helmetMat(team, code, isPlayer)));
     helmet.add(new T.Mesh(S.visor, C.visor));
     helmet.position.set(-0.9, 7.55, 0);
     g.add(helmet);
