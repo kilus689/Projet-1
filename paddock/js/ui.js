@@ -60,7 +60,8 @@
   };
 
   function carCanvas(team, w, hgt) {
-    const c = h('canvas', { width: w * 2, height: hgt * 2, style: `width:${w}px;height:${hgt}px` });
+    const k = Math.max(3, Math.ceil(window.devicePixelRatio || 1));
+    const c = h('canvas', { width: w * k, height: hgt * k, style: `width:${w}px;height:${hgt}px` });
     F1.drawCarPreview(c, team);
     return c;
   }
@@ -87,7 +88,9 @@
   }
 
   function portrait(d, team, size, cls) {
-    const c = h('canvas', { class: 'portrait' + (cls ? ' ' + cls : ''), width: size * 2, height: size * 2 });
+    // définition adaptée à l'écran (Retina ×2 ou ×3), minimum 3× la taille affichée
+    const k = Math.max(3, Math.ceil(window.devicePixelRatio || 1));
+    const c = h('canvas', { class: 'portrait' + (cls ? ' ' + cls : ''), width: size * k, height: size * k });
     if (F1.Portraits) {
       F1.Portraits.draw(c, d, team);
       // la police du jeu peut arriver après le premier dessin
