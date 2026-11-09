@@ -480,3 +480,20 @@ kbd {
 }
 .touch-mode .hud-bottom { bottom: max(250px, calc(env(safe-area-inset-bottom) + 240px)); }
 @media (max-height: 700px) { .touch-mode .hud-bottom { bottom: 190px; } }
+
+/* Photos des voitures et portraits des pilotes */
+.car-photo { display: block; line-height: 0; overflow: hidden; border-radius: 8px; background: #14171d; }
+.car-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.car-photo canvas { display: block; margin: auto; }
+.car-photo.hero { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; margin: 0 auto 12px; border-bottom: 4px solid var(--team, #888); }
+.car-photo.hero canvas { width: 100% !important; height: 100% !important; object-fit: contain; }
+.team-grid.big { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.team-card.big { flex-direction: column; align-items: stretch; padding: 0 0 10px; gap: 8px; border-left: none; border-top: 5px solid var(--team); overflow: hidden; }
+.team-card.big .car-photo { width: 100%; aspect-ratio: 16 / 9; border-radius: 0; }
+.team-card.big .car-photo canvas { width: 100% !important; height: 100% !important; }
+.team-card.big .tc-body { padding: 0 14px; }
+.portrait { display: block; flex: none; border-radius: 10px; background: #222; }
+.dc-photo { width: 56px; height: 56px; border-radius: 0 8px 8px 0; }
+.db-photo { width: 100%; max-width: 210px; height: auto; aspect-ratio: 1; margin-bottom: 8px; border-radius: 10px; }
+.liv-photo { width: 40px; height: 40px; border-radius: 6px; }
+@media (max-width: 700px) { .team-grid.big { grid-template-columns: 1fr; } }
