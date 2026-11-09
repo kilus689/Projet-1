@@ -299,6 +299,7 @@ kbd {
 }
 #toast.show { opacity: 1; }
 #toast.purple { color: var(--purple); }
+#toast.red { color: #ff5a4f; }
 
 /* ---------- Commandes tactiles ---------- */
 #touch { position: fixed; inset: auto 0 0 0; height: 0; z-index: 15; }
@@ -497,3 +498,11 @@ kbd {
 .db-photo { width: 100%; max-width: 210px; height: auto; aspect-ratio: 1; margin-bottom: 8px; border-radius: 10px; }
 .liv-photo { width: 40px; height: 40px; border-radius: 6px; }
 @media (max-width: 700px) { .team-grid.big { grid-template-columns: 1fr; } }
+
+/* Indicateur de dégâts (aileron avant, suspension, aileron arrière) */
+.tp-dmg { display: inline-flex; gap: 3px; margin-left: 4px; }
+.tp-dmg i { font-style: normal; font-size: 11px; font-weight: 800; padding: 2px 5px; border-radius: 4px; background: rgba(61, 220, 132, 0.22); color: #9ff0c4; }
+.tp-dmg i.light { background: rgba(255, 214, 10, 0.18); color: #ffe066; }
+.tp-dmg i.warn { background: #c98a00; color: #fff; }
+.tp-dmg i.bad { background: #e10600; color: #fff; animation: dmgblink 0.8s infinite alternate; }
+@keyframes dmgblink { to { opacity: 0.55; } }

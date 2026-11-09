@@ -576,6 +576,8 @@
         throttle: 0, brakeIn: 0, gap: 0,
         battery: 0.85, aeroOpen: false, boosting: false, deploying: false,
         tyre: 'M', wear: 0, tyreF: 1, stops: 0, pitReq: false, nextTyre: null, pit: null, prevProg: null,
+        // Dégâts (0 = intact, 1 = détruit) : aileron avant, aileron arrière, suspension/carrosserie
+        dmg: { fw: 0, rw: 0, sus: 0 }, dmgSide: 0, dmgMul: 0, dmgEvents: null,
       }, o);
     }
 
@@ -604,7 +606,15 @@
       const P = PHYS, E = F1.ERS;
       const C0 = cond || F1.WEATHER.dry;
       const tf = this.tyreF || 1;
-      const C = { grip: C0.grip * tf, steer: C0.steer * (0.5 + 0.5 * tf), brake: C0.brake * (0.7 + 0.3 * tf), accel: C0.accel * (0.8 + 0.2 * tf), aero: C0.aero };
+      const D = this.dmg;
+      // Aileron avant abîmé : moins d'appui à l'avant (sous-virage) ; arrière : moins de grip et de vitesse ; suspension : la voiture tire d'un côté
+      const C = {
+        grip: C0.grip * tf * (1 - 0.22 * D.fw - 0.16 * D.rw - 0.08 * D.sus),
+        steer: C0.steer * (0.5 + 0.5 * tf) * (1 - 0.32 * D.fw - 0.1 * D.sus),
+        brake: C0.brake * (0.7 + 0.3 * tf) * (1 - 0.12 * D.fw),
+        accel: C0.accel * (0.8 + 0.2 * tf) * (1 - 0.1 * D.sus),
+        aero: C0.aero,
+      };
       this.steer += (inp.steer - this.steer) * Math.min(1, dt * 10);
       this.throttle = inp.throttle;
       this.brakeIn = inp.brake;
@@ -622,6 +632,7 @@
       // Plus la voiture va vite, plus le rayon de braquage s'agrandit (comme une vraie F1)
       const high = 1 - P.highSpeedSteer * Math.pow(Math.min(1, absF / P.maxSpeed), 0.8);
       this.a += this.steer * P.steerRate * (track.gripK || 1) * C.steer * (aero ? 0.82 : 1) * low * high * Math.sign(vF) * (this.offTrack ? 0.8 : 1) * dt;
+      if (D.sus > 0.05 && absF > 30) this.a += D.sus * this.dmgSide * 0.05 * low * Math.sign(vF) * dt;
       this.a = wrapAngle(this.a);
 
       fx = Math.cos(this.a); fy = Math.sin(this.a);
@@ -639,7 +650,7 @@
       const ers = deploy > 0 ? (this.boosting ? E.boostGain : E.gain) : this.battery <= 0.002 ? E.empty : 0;
       const pw = this.power * (1 + ers);
 
-      const maxS = P.maxSpeed * pw * (1 + 0.045 * aero) * (this.offTrack ? P.offTrackMax : 1);
+      const maxS = P.maxSpeed * pw * (1 + 0.045 * aero) * (1 - 0.05 * D.fw - 0.07 * D.rw - 0.08 * D.sus) * (this.offTrack ? P.offTrackMax : 1);
       // Si la voiture recule (rebond sur un mur) et qu'on accélère : on freine d'abord le recul
       if (inp.throttle > 0 && vF < 0) vF = Math.min(0, vF + P.brake * inp.throttle * dt);
       if (inp.throttle > 0 && vF > -10) {
@@ -688,8 +699,12 @@
       this.offTrack = ad > track.half + 6;
       if (this.pit) { this.offTrack = false; return; }
 
-      // Mur / barrière
-      const lim = track.half + track.runoff;
+      // Mur / barrière : c'est la carrosserie (et pas seulement le centre) qui s'arrête contre le mur.
+      // Largeur occupée selon l'angle de la voiture : 0,95 m de côté, jusqu'à 2,5 m si elle est en travers.
+      const hx = Math.cos(this.a), hy = Math.sin(this.a);
+      const sl = Math.abs(hx * p.nx + hy * p.ny);
+      const ext = sl * 25 + Math.sqrt(Math.max(0, 1 - sl * sl)) * 9.5;
+      const lim = track.half + track.runoff - ext;
       if (ad > lim) {
         const s = Math.sign(this.lat);
         this.x -= p.nx * (ad - lim) * s;
@@ -698,6 +713,14 @@
         if (vn * s > 0) {
           const imp = Math.abs(vn);
           this.wallHit = Math.max(this.wallHit, imp);
+          // Dégâts : le nez qui tape abîme l'aileron avant, l'arrière l'aileron arrière, le flanc la suspension
+          if (this.dmgMul && imp > 60) {
+            const h = (hx * p.nx + hy * p.ny) * s;
+            const sev = Math.min(1, (imp - 60) / 420) * this.dmgMul * (this.isPlayer ? 1 : 0.5);
+            if (h > 0.4) this.hurt('fw', sev * 1.1, s);
+            else if (h < -0.4) this.hurt('rw', sev * 1.1, s);
+            else this.hurt('sus', sev * 0.8, s);
+          }
           // On retire la vitesse vers le mur (petit rebond seulement si le choc est franc)
           const bounce = imp > 120 ? 1.3 : 1.0;
           this.vx -= p.nx * vn * bounce;
@@ -710,8 +733,29 @@
       }
       this.alongTrack = this.vx * p.tx + this.vy * p.ty;
     }
+
+    hurt(part, amount, side) {
+      if (!(amount > 0.004)) return;
+      const D = this.dmg, before = D[part];
+      D[part] = Math.min(1, before + amount);
+      if (part === 'sus' && side) this.dmgSide = side;
+      if (this.dmgEvents) {
+        const crossed = [0.15, 0.5, 0.9].filter((th) => before < th && D[part] >= th);
+        if (crossed.length) this.dmgEvents.push({ type: 'damage', car: this, part, level: D[part] });
+      }
+    }
+    get damaged() { const D = this.dmg; return Math.max(D.fw, D.rw, D.sus); }
   }
   F1.Car = Car;
+  F1.DAMAGE_PARTS = { fw: 'Aileron avant', rw: 'Aileron arrière', sus: 'Suspension' };
+
+  // Partie de la voiture touchée par un contact venant de la direction (nx, ny)
+  function contactPart(car, nx, ny) {
+    const h = Math.cos(car.a) * nx + Math.sin(car.a) * ny;
+    if (h > 0.5) return 'fw';
+    if (h < -0.5) return 'rw';
+    return 'sus';
+  }
 
   F1.collide = function (cars) {
     const r2 = PHYS.radius * 2;
@@ -735,6 +779,14 @@
           a.vx -= nx * imp; a.vy -= ny * imp;
           b.vx += nx * imp; b.vy += ny * imp;
           hits.push({ a, b, force: -rel });
+          // Contact entre voitures : dégâts selon la partie touchée (nez dans l'arrière, roue contre roue…)
+          // Les frottements légers ne cassent rien : il faut un vrai choc (> 25 km/h de vitesse relative)
+          const sev = Math.min(1, Math.max(0, -rel - 70) / 420);
+          if (sev > 0) {
+            const side = (o, sx, sy) => Math.sign(-Math.sin(o.a) * sx + Math.cos(o.a) * sy) || 1;
+            if (a.dmgMul) { const pa = contactPart(a, nx, ny); a.hurt(pa, sev * a.dmgMul * (a.isPlayer || b.isPlayer ? 1 : 0.4) * (pa === 'sus' ? 0.6 : 1), side(a, nx, ny)); }
+            if (b.dmgMul) { const pb = contactPart(b, -nx, -ny); b.hurt(pb, sev * b.dmgMul * (a.isPlayer || b.isPlayer ? 1 : 0.4) * (pb === 'sus' ? 0.6 : 1), side(b, -nx, -ny)); }
+          }
         }
       }
     }
@@ -819,7 +871,7 @@
   // ---------- Course / qualification jouée ----------
   // entries : [{ id, name, code, num, team, isPlayer, skill, power }] dans l'ordre de la grille
   class Race {
-    constructor({ track, entries, laps, mode, weather, aeroMode, assists, tyreWear, playerTyre }) {
+    constructor({ track, entries, laps, mode, weather, aeroMode, assists, tyreWear, playerTyre, damage }) {
       this.track = track;
       this.weather = F1.WEATHER[weather] ? weather : 'dry';
       this.cond = Object.assign({}, F1.WEATHER[this.weather], { aero: aeroMode || 'auto' });
@@ -837,10 +889,13 @@
       const rand = rng(Date.now());
       this.rand = rand;
       this.wearMul = this.mode === 'quali' || tyreWear === 'off' ? 0 : tyreWear === 'high' ? 1.7 : 1;
+      this.dmgMul = damage === 'off' || !damage ? 0 : damage === 'high' ? 1.8 : 1;
 
       entries.forEach((e, g) => {
         const car = new Car(Object.assign({ lanePref: (rand() - 0.5) * 24 }, e));
         car.grid = g + 1;
+        car.dmgMul = this.dmgMul;
+        car.dmgEvents = this.events;
         car.wx = this.cond.ai;
         // Pneus de départ : intermédiaires sous la pluie, sinon tendres ou médiums (choix du joueur)
         if (this.weather === 'rain') car.tyre = 'I';
@@ -930,6 +985,12 @@
     }
 
     aiStrategy(car) {
+      // Aileron avant cassé : l'IA rentre changer de nez s'il reste de la course
+      if (!car.isPlayer && car.dmg && (car.dmg.fw > 0.45 || car.dmg.rw > 0.6) && this.lapsLeft(car) > 1.5 && !car.pitReq) {
+        car.pitReq = true;
+        car.nextTyre = this.bestTyreFor(this.lapsLeft(car) - 0.3);
+        return;
+      }
       if (!this.wearMul && !(this.weather === 'rain' && car.tyre !== 'I')) return;
       const left = this.lapsLeft(car);
       if (left < 0.4) return;
@@ -976,6 +1037,8 @@
           car.nextTyre = null;
           car.stops++;
           car.battery = Math.max(car.battery, 0.5);
+          // Les ailerons sont changés pendant l'arrêt ; la suspension, elle, ne se répare pas
+          car.dmg.fw = 0; car.dmg.rw = 0;
           pit.phase = 'out';
         }
       } else {
@@ -1007,6 +1070,9 @@
           pit.d = pit.stopD;
           pit.phase = 'stop';
           pit.stationary = 2.1 + this.rand() * 0.6 + (this.rand() < 0.05 ? 2.5 : 0);
+          // Changement de nez : environ 8 s de plus, aileron arrière : 15 s
+          pit.repair = (car.dmg.fw > 0.1 ? 8 : 0) + (car.dmg.rw > 0.25 ? 15 : 0);
+          pit.stationary += pit.repair;
           pit.stopT = pit.stationary;
           pit.v = 0;
         }
