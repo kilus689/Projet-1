@@ -272,7 +272,7 @@
       paint: merge(paint),
       carbon: merge(carbon),
       accent: merge(accent),
-      helmet: new T.SphereGeometry(1.45, 18, 14),
+      helmet: new T.SphereGeometry(1.45, 40, 30),
       visor: at(new T.SphereGeometry(1.48, 18, 8, -0.9, 1.8, 1.05, 0.55), 0, 0, 0, 0, Math.PI, 0),
       wheelF: wheelGeo(3.525, 2.8),
       wheelR: wheelGeo(3.55, 3.75),
@@ -322,6 +322,7 @@
     if (code && F1.Helmets) {
       const tex = new T.CanvasTexture(F1.Helmets.canvas(code, team));
       tex.colorSpace = T.SRGBColorSpace;
+      tex.anisotropy = 8;
       m = new T.MeshPhysicalMaterial({ map: tex, roughness: 0.25, clearcoat: 1 });
     } else m = new T.MeshPhysicalMaterial({ color: isPlayer ? 0xffffff : team.color2, roughness: 0.25, clearcoat: 1 });
     helmCache.set(key, m);

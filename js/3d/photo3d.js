@@ -3,7 +3,7 @@
 // mis en cache en image (une seule fois par écurie et par version de livrée).
 (function () {
   const F1 = window.F1, X = F1.X3D, T = window.THREE;
-  const W = 960, H = 540;
+  const W = 1920, H = 1080; // photos en Full HD (affichées nettes sur écran Retina)
   let R = null, scene = null, cam = null, slot = null, broken = false;
   const cache = new Map();
   let queue = Promise.resolve();
@@ -67,7 +67,11 @@
   function render(team, num) {
     if (!setup()) return null;
     while (slot.children.length) slot.remove(slot.children[0]);
+    // textures de carrosserie en haute définition le temps de la photo
+    const prev = X.texRes;
+    X.texRes = Math.max(prev || 0, 2048);
     const car = X.makeCar(team, num || 1, false, 1);
+    X.texRes = prev;
     car.g.children[0].visible = false; // ombre factice du jeu : le studio a de vraies ombres
     car.g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     car.g.rotation.y = 0.12;
@@ -75,7 +79,13 @@
     for (const w of car.wheels) if (w.front) w.pivot.rotation.y = 0.22;
     slot.add(car.g);
     R.render(scene, cam);
-    return R.domElement.toDataURL('image/jpeg', 0.9);
+    const url = R.domElement.toDataURL('image/jpeg', 0.95);
+    // libère la mémoire graphique de la livrée (rechargée automatiquement si elle resert)
+    R.renderLists.dispose();
+    const maps = new Set();
+    car.g.traverse((o) => { if (o.isMesh && o.material && o.material.map) maps.add(o.material.map); });
+    for (const m of maps) m.dispose();
+    return url;
   }
 
   F1.CarPhoto = {

@@ -45,7 +45,7 @@
       let q = null;
       try { q = localStorage.getItem('paddock-gfx'); } catch (e) { /* ignoré */ }
       const coarse = window.matchMedia('(pointer: coarse)').matches;
-      this.quality = QUALITY.includes(q) ? q : coarse ? 'medium' : 'high';
+      this.quality = QUALITY.includes(q) ? q : coarse ? 'high' : 'ultra';
     }
 
     get qualityLabel() { return QLABEL[this.quality]; }

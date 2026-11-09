@@ -191,10 +191,10 @@
       if (helmTex.has(key)) return helmTex.get(key);
       const d = F1.DRIVERS2026.find((x) => x.code === code) || { code, id: String(code || '').toLowerCase() };
       const cv = document.createElement('canvas');
-      cv.width = 512; cv.height = 256;
+      cv.width = 1024; cv.height = 512;
       const g = cv.getContext('2d'), D = designOf(d, team), sd = hash(d.id || code);
-      paintHelmet(g, 0, 0, 256, 256, D, sd);
-      g.save(); g.translate(512, 0); g.scale(-1, 1); paintHelmet(g, 0, 0, 256, 256, D, sd); g.restore();
+      paintHelmet(g, 0, 0, 512, 512, D, sd);
+      g.save(); g.translate(1024, 0); g.scale(-1, 1); paintHelmet(g, 0, 0, 512, 512, D, sd); g.restore();
       helmTex.set(key, cv);
       return cv;
     },
