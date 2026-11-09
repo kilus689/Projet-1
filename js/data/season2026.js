@@ -61,9 +61,9 @@
     { id: 'williams', name: 'Williams', color: '#1868db', color2: '#0b1a33', engine: 'mercedes', aero: 81, chassis: 82, reliability: 85, budget: 120, prestige: 80 },
     { id: 'alpine', name: 'Alpine', color: '#0090ff', color2: '#ff87bc', engine: 'mercedes', aero: 79, chassis: 79, reliability: 84, budget: 125, prestige: 76 },
     { id: 'racingbulls', name: 'Racing Bulls', color: '#f5f5f5', color2: '#3d5afe', engine: 'rbford', aero: 81, chassis: 80, reliability: 82, budget: 115, prestige: 72 },
-    { id: 'haas', name: 'Haas', color: '#dfe3e6', color2: '#da1e28', engine: 'ferrari', aero: 79, chassis: 79, reliability: 82, budget: 105, prestige: 70 },
+    { id: 'haas', name: 'Haas', color: '#efefef', color2: '#e10600', engine: 'ferrari', aero: 79, chassis: 79, reliability: 82, budget: 105, prestige: 70 },
     { id: 'audi', name: 'Audi', color: '#a6a8ab', color2: '#e1001a', engine: 'audi', aero: 78, chassis: 79, reliability: 76, budget: 135, prestige: 78 },
-    { id: 'cadillac', name: 'Cadillac', color: '#111111', color2: '#d4d4d4', engine: 'ferrari', aero: 74, chassis: 75, reliability: 78, budget: 120, prestige: 68 },
+    { id: 'cadillac', name: 'Cadillac', color: '#e9eaec', color2: '#141414', engine: 'ferrari', aero: 74, chassis: 75, reliability: 78, budget: 120, prestige: 68 },
   ];
 
   // pace : vitesse pure, craft : combativité/gestion de course (0-100)
