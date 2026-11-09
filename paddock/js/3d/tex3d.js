@@ -351,12 +351,12 @@
       z.box(1, 0, 0.45, ...UPPER, '#f2f2f2'); z.stripe(1, 0.5, '#d40000', 0.04);
       z.box(2, 0.7, 1, 0, 1, CARB);
     },
-    // Bleu, nez et dos du cockpit roses, rose sur l'arrière du capot
+    // Bleu, nez rose, rose à l'arrière des pontons et sur le capot moteur
     alpine: (z) => {
       z.all('#1f6fd1'); z.shade(0.2); z.lower(CARB);
-      z.box(0, 0, 0.62, 0.38, 0.62, '#f19ec6');
-      z.box(1, 0.55, 1, ...TOP, '#f19ec6');
-      z.box(2, 0, 0.15, ...UPPER, '#f19ec6');
+      z.box(0, 0, 0.12, 0, 1, '#f19ec6'); z.box(0, 0, 0.62, 0.42, 0.58, '#f19ec6');
+      z.box(1, 0.55, 1, ...UPPER, '#f19ec6');
+      z.box(2, 0.6, 0.9, 0.15, 0.4, '#f19ec6'); z.box(2, 0.6, 0.9, 0.6, 0.85, '#f19ec6');
     },
     // Bleu roi, flancs bleu clair et blanc, dessous noir
     williams: (z) => {
@@ -373,12 +373,12 @@
       for (let i = 0; i < 4; i++) z.diag(2, 0.12 + i * 0.13, 0.06, '#e6e7e8');
       z.stripe(2, 0.3, '#00d2be', 0.02); z.stripe(2, 0.7, '#00d2be', 0.02);
     },
-    // Noir et blanc, capot moteur asymétrique, dégradé blanc sur les pontons
+    // Blanc argenté, capot moteur et bas noirs, filets noirs
     cadillac: (z) => {
-      z.all('#121212'); z.carbonWeave();
-      z.box(1, 0, 1, 0, 0.5, '#f2f2f2');
-      z.stripe(0, 0.32, '#f2f2f2', 0.025); z.stripe(0, 0.68, '#f2f2f2', 0.025);
-      z.fade(2, 0, 0.6, '#f2f2f2');
+      z.all('#e9eaec'); z.shade(0.12); z.lower(CARB);
+      z.box(1, 0.35, 1, 0, 1, '#141414'); z.fade(1, 0, 0.35, '#141414');
+      z.stripe(0, 0.3, '#141414', 0.015); z.stripe(0, 0.7, '#141414', 0.015);
+      z.box(2, 0.65, 1, 0, 1, '#141414');
     },
     // Vert, filets jaune citron, bas noir
     aston: (z) => {
@@ -387,11 +387,12 @@
       z.dots(2, 0.15, 0.45, '#cedc00');
       z.box(2, 0.55, 1, 0, 1, CARB);
     },
-    // Gris clair, haut des pontons et flancs du capot rouges, dessus du capot noir
+    // Avant gris argent, arrière des pontons rouge, capot moteur et bas noirs
     audi: (z) => {
-      z.all('#d9d9d9'); z.shade(0.15); z.lower(CARB);
-      z.box(1, 0, 1, ...TOP, '#151515'); z.box(1, 0, 0.55, 0.18, 0.3, '#e1001a'); z.box(1, 0, 0.55, 0.7, 0.82, '#e1001a');
-      z.box(2, 0, 0.35, 0, 1, '#e1001a');
+      z.all('#cfd0d2'); z.shade(0.15); z.lower(CARB);
+      z.box(1, 0, 1, 0, 1, '#151515');
+      z.box(2, 0.42, 0.85, 0, 1, '#e1001a'); z.box(2, 0.85, 1, 0, 1, '#151515');
+      z.box(0, 0.88, 1, 0, 1, '#e1001a');
     },
     // Papaye, pontons noirs à bandes papaye, touches turquoise près du cockpit
     mclaren: (z) => {
@@ -400,11 +401,13 @@
       z.box(1, 0, 1, 0, 1, '#151515'); z.box(1, 0, 0.25, ...TOP, '#00a19c'); z.box(1, 0.35, 1, 0.18, 0.26, '#ff8000'); z.box(1, 0.35, 1, 0.74, 0.82, '#ff8000');
       z.box(2, 0, 1, 0, 1, '#151515'); z.diag(2, 0.25, 0.1, '#ff8000'); z.diag(2, 0.55, 0.1, '#ff8000');
     },
-    // Blanc, bas noir, filet rouge
+    // Blanc, bandes rouges sur le nez et le dos, bas et capot moteur noirs
     haas: (z) => {
-      z.all('#ececec'); z.lower(CARB);
-      z.stripe(0, 0.3, '#da1e28', 0.02); z.stripe(0, 0.7, '#da1e28', 0.02);
-      z.box(2, 0.6, 1, 0, 1, CARB); z.box(1, 0, 1, ...TOP, '#1a1a1a');
+      z.all('#efefef'); z.lower(CARB);
+      z.box(0, 0, 0.75, 0.42, 0.58, '#e10600');
+      z.diag(0, 0.55, 0.12, '#e10600');
+      z.box(1, 0, 1, 0, 1, '#151515'); z.box(1, 0, 0.6, 0.44, 0.56, '#e10600');
+      z.box(2, 0.6, 1, 0, 1, CARB); z.diag(2, 0.15, 0.1, '#e10600');
     },
   };
 
