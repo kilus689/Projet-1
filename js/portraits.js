@@ -29,7 +29,13 @@
     bea: { base: '#14217a', c: ['#d7ff1f', '#ffffff'], style: 'crown' },
     hul: { base: '#f2f2f2', c: ['#8a8a8a', '#ff3b1f'], style: 'crown' },
     bor: { base: '#ffd600', c: ['#123a7a', '#0f8a3a', '#ffffff'], style: 'bands' },
-    per: { base: '#0b0b0f', c: ['#1e7bff', '#8a8f99'], style: 'swirl' },
+    bot: { base: '#0b0b0f', c: ['#1e7bff', '#8a8f99'], style: 'swirl' },
+    per: { base: '#111111', c: ['#d8ff1f', '#6b6b6b'], style: 'chevron' },
+    had: { base: '#141a4a', c: ['#ffe81a', '#7b2fd0', '#ffb000'], style: 'chevron' },
+    str: { base: '#0d0d0d', c: ['#0f8f7a'], style: 'lines' },
+    gas: { base: '#3fb6e6', c: ['#ffffff'], style: 'lines' },
+    lec: { base: '#e0140f', c: ['#f2f2f2', '#4ab8f0'], style: 'split' },
+    pia: { base: '#13205e', c: ['#f5ff1a', '#ff3a14', '#2fb8e0'], style: 'chevron' },
   };
   function rng(seed) { let x = seed || 1; return () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x >>> 0) % 10000) / 10000; }; }
   // Peint un motif de casque dans le rectangle (x, y, w, h) : haut = sommet du casque
@@ -58,6 +64,13 @@
       g.fillStyle = a(1); g.fillRect(0, h * 0.68, w, h * 0.32);
       g.fillStyle = a(2);
       for (const fx of [0.18, 0.82]) { g.beginPath(); g.arc(w * fx, h * 0.5, h * 0.14, 0, Math.PI * 2); g.fill(); }
+    } else if (D.style === 'split') {
+      g.fillStyle = a(0);
+      g.beginPath(); g.moveTo(0, h * 0.5); g.quadraticCurveTo(w * 0.5, h * 0.62, w, h * 0.5); g.lineTo(w, h); g.lineTo(0, h); g.fill();
+      g.strokeStyle = a(1); g.lineWidth = Math.max(1, h * 0.025);
+      g.beginPath(); g.moveTo(0, h * 0.47); g.quadraticCurveTo(w * 0.5, h * 0.59, w, h * 0.47); g.stroke();
+      g.beginPath(); g.moveTo(w * 0.1, h * 0.3); g.lineTo(w * 0.4, h * 0.3); g.stroke();
+      g.beginPath(); g.moveTo(w * 0.6, h * 0.3); g.lineTo(w * 0.9, h * 0.3); g.stroke();
     } else if (D.style === 'lines') {
       g.strokeStyle = a(0); g.lineWidth = Math.max(1, h * 0.018);
       for (let i = 0; i < 9; i++) {
