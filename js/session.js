@@ -316,7 +316,7 @@
     const winner = race.finishOrder[0];
     let order = st.map((c) => ({
       id: c.id,
-      dnf: false,
+      dnf: !!c.out,
       time: c.finished ? c.finishTime : null,
       gap: c.finished && winner ? c.finishTime - winner.finishTime : null,
       lapsDown: c.finished ? 0 : Math.max(0, (st[0].wrap - c.wrap)),
@@ -492,7 +492,8 @@
         const li = document.createElement('li');
         if (c.isPlayer) li.className = 'me';
         let gap = '';
-        if (i === 0) gap = c.finished ? 'Arrivé' : 'Leader';
+        if (c.out) gap = 'OUT';
+        else if (i === 0) gap = c.finished ? 'Arrivé' : 'Leader';
         else if (race.started) {
           const down = st[0].wrap - c.wrap - (st[0].idx < c.idx ? 1 : 0);
           const iv = interval(st, i);
@@ -573,6 +574,21 @@
         } else if (ev.type === 'lap') {
           if (ev.car === p) toast(ev.lap === race.laps ? 'Dernier tour !' : `Tour ${ev.lap} · ${fmt(ev.time)}`);
           if (ev.lap === race.laps && race.standings()[0] === ev.car) tv('Course', 'Dernier tour', `${ev.car.name} mène la course`);
+        } else if (ev.type === 'flag') {
+          const F = { yellow: ['DRAPEAU JAUNE', 'yellow'], vsc: ['VSC', 'yellow'], sc: ['SAFETY CAR', 'yellow'], green: ['', ''] }[ev.flag];
+          const el = $('tv-flag');
+          el.textContent = F[0]; el.className = 'tv-flag ' + F[1] + (F[0] ? '' : ' hidden');
+          if (ev.flag === 'vsc') { tv('Direction de course', 'Voiture de sécurité virtuelle', 'Vitesse limitée pour toutes les voitures', 'yellow'); toast('VSC : vitesse limitée', 'red'); }
+          if (ev.flag === 'sc') { tv('Direction de course', 'Voiture de sécurité', 'Dépassements interdits, suivez la file', 'yellow'); toast('SAFETY CAR : pas de dépassement', 'red'); }
+          if (ev.flag === 'yellow' && race.yellow && p && Math.abs(race.track.rel(p.idx) - race.track.rel(race.yellow.idx)) < 600) toast('Drapeau jaune : ralentissez', 'red');
+        } else if (ev.type === 'scEnding') {
+          tv('Direction de course', 'La voiture de sécurité rentre ce tour', 'Préparez la relance', 'yellow');
+        } else if (ev.type === 'restart') {
+          tv('Direction de course', 'Drapeau vert', ev.vsc ? 'Fin de la VSC' : 'Relance de la course', 'green');
+          if (p && !p.out) toast('Drapeau vert : course relancée !', 'purple');
+        } else if (ev.type === 'retired') {
+          if (ev.car === p) { banner('Abandon', 'warn'); S.finishTimer = 3; audio.beep(140, 0.6, 0.2); }
+          else tv('Abandon', ev.car.name, `${ev.car.team.name} · accident`, 'red');
         } else if (ev.type === 'damage') {
           if (ev.car === p) {
             const name = F1.DAMAGE_PARTS[ev.part], pc = Math.round(ev.level * 100);
@@ -604,7 +620,7 @@
       if (S.state !== 'paused') tvTick(dt);
 
       if (S.state === 'run' && race.mode === 'race' && p) {
-        if (p.finished) {
+        if (p.finished || p.out) {
           S.finishTimer -= dt;
           if (S.finishTimer <= 0) { S.state = 'done'; hideBanner(); raceDone(); }
         } else if (p.wrongWay > 1.2) banner('Mauvais sens !', 'warn');
@@ -677,7 +693,8 @@
       const tr = document.createElement('tr');
       if (c.isPlayer) tr.className = 'me';
       let gap;
-      if (!c.finished) gap = '<span class="pending">en piste…</span>';
+      if (c.out) gap = '<span class="pending">Abandon</span>';
+      else if (!c.finished) gap = '<span class="pending">en piste…</span>';
       else if (i === 0) gap = fmt(c.finishTime);
       else gap = '+' + (c.finishTime - race.finishOrder[0].finishTime).toFixed(3);
       tr.innerHTML = `<td>${i + 1}</td><td><span class="swatch" style="background:${c.team.color}"></span><span class="nm"></span></td><td>${gap}</td>`;

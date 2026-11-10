@@ -127,6 +127,7 @@
       this.envRT = this.pmrem.fromEquirectangular(this.world.sky);
       this.scene.environment = this.envRT.texture;
       this.scene.add(this.camera);
+      this.fx = makeFx(this.scene);
       this.trackId = track.id;
       this.cars.clear();
       this.raceRef = null;
@@ -181,7 +182,10 @@
         if (m.tyre !== c.tyre) { m.tyre = c.tyre; const rm = X.ringMat(c.tyre); for (const r of m.rings) r.material = rm; }
         // Légère prise de roulis/tangage avec les forces
         m.g.rotation.z = pitch + Math.max(-0.02, Math.min(0.02, (c.brakeIn > 0.5 ? 0.012 : c.throttle > 0 ? -0.006 : 0)));
+        this.carDamage(c, m, dt);
       }
+      this.updateSC(race);
+      this.updateFx(race, dt);
 
       if (this.world.racingLine) this.world.racingLine.visible = !!(race.assists && race.assists.line);
 
@@ -247,6 +251,151 @@
       this.renderer.render(this.scene, cam);
     }
   }
+
+  // ---------- Dégâts visibles, étincelles, fumée, débris, voiture de sécurité ----------
+  function makeFx(scene) {
+    const NS = 400;
+    const sp = new Float32Array(NS * 3).fill(-9999);
+    const sg = new T.BufferGeometry();
+    sg.setAttribute('position', new T.BufferAttribute(sp, 3));
+    const sparks = new T.Points(sg, new T.PointsMaterial({ color: 0xffb340, size: 0.8, transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+    sparks.frustumCulled = false;
+    scene.add(sparks);
+    const smokeTex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+      gr.addColorStop(0, 'rgba(255,255,255,0.8)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      return new T.CanvasTexture(c);
+    })();
+    const smokeMat = new T.SpriteMaterial({ map: smokeTex, color: 0x8c8c8c, transparent: true, depthWrite: false, opacity: 0.5 });
+    const smoke = [];
+    for (let i = 0; i < 70; i++) { const sp2 = new T.Sprite(smokeMat.clone()); sp2.visible = false; scene.add(sp2); smoke.push({ s: sp2, life: 0 }); }
+    return { sparks, sp, sv: new Float32Array(NS * 3), sl: new Float32Array(NS), si: 0, smoke, smi: 0, debris: [] };
+  }
+
+  Renderer3D.prototype.carDamage = function (c, m, dt) {
+    const D = c.dmg;
+    if (!D || !m.fw) return;
+    // Aileron avant : plie vers le sol, puis se détache s'il est détruit
+    if (D.fw >= 0.9 && !m.fwGone) { m.fwGone = true; this.detach(m, m.fw, c); }
+    if (D.fw < 0.9 && m.fwGone) { m.fwGone = false; m.fw.visible = true; }
+    m.fw.rotation.z = -D.fw * 0.3;
+    m.fw.rotation.x = (c.dmgSide || 1) * D.fw * 0.12;
+    if (D.rw >= 0.9 && !m.rwGone) { m.rwGone = true; this.detach(m, m.rw, c); }
+    if (D.rw < 0.9 && m.rwGone) { m.rwGone = false; m.rw.visible = true; }
+    m.rw.rotation.x = (c.dmgSide || 1) * D.rw * 0.25;
+    // Volet de l'aéro active : s'ouvre en ligne droite
+    const open = c.aeroOpen && !m.rwGone ? 0.75 : 0;
+    m.flap.rotation.z += (open - m.flap.rotation.z) * Math.min(1, dt * 10);
+    // Suspension cassée : roues du côté touché de travers
+    for (const w of m.wheels) {
+      const side = Math.sign(w.pivot.position.z);
+      w.pivot.rotation.x = side === (c.dmgSide || 0) ? side * D.sus * 0.35 : 0;
+    }
+    // Fumée : suspension très abîmée ou voiture arrêtée après un accident
+    if ((D.sus >= 0.5 || c.out) && Math.random() < (c.out ? 0.5 : 0.25)) this.puff(m.g.position.x, m.g.position.y + 3, m.g.position.z);
+  };
+
+  Renderer3D.prototype.detach = function (m, part, c) {
+    if (!this.fx) return;
+    const piece = part.clone();
+    part.updateWorldMatrix(true, false);
+    part.matrixWorld.decompose(piece.position, piece.quaternion, piece.scale);
+    this.scene.add(piece);
+    part.visible = false;
+    const sp = c.speed * 0.6;
+    this.fx.debris.push({ o: piece, vx: Math.cos(c.a) * sp + (Math.random() - 0.5) * 80, vz: Math.sin(c.a) * sp + (Math.random() - 0.5) * 80, vy: 60 + Math.random() * 40, spin: (Math.random() - 0.5) * 12, life: 25 });
+    for (let k = 0; k < 6; k++) this.puff(piece.position.x, piece.position.y, piece.position.z);
+  };
+
+  Renderer3D.prototype.puff = function (x, y, z) {
+    const F = this.fx;
+    const p = F.smoke[F.smi++ % F.smoke.length];
+    p.s.visible = true; p.life = 2.2; p.s.position.set(x + (Math.random() - 0.5) * 3, y, z + (Math.random() - 0.5) * 3);
+    p.s.scale.set(4, 4, 4);
+  };
+
+  Renderer3D.prototype.updateFx = function (race, dt) {
+    const F = this.fx;
+    if (!F) return;
+    const tr = race.track, N = tr.n;
+    const hAt = (x, y) => { const i = tr.nearest(x, y, -1); return tr.h ? tr.h[i] * 10 : 0; };
+    // Nouvelles étincelles
+    while (race.sparks && race.sparks.length) {
+      const s0 = race.sparks.shift();
+      const n = Math.min(40, 8 + s0.power / 12), y = hAt(s0.x, s0.y) + 1.5;
+      for (let k = 0; k < n; k++) {
+        const i = F.si++ % F.sl.length;
+        F.sp[i * 3] = s0.x; F.sp[i * 3 + 1] = y; F.sp[i * 3 + 2] = s0.y;
+        F.sv[i * 3] = (Math.random() - 0.5) * 220; F.sv[i * 3 + 1] = 30 + Math.random() * 90; F.sv[i * 3 + 2] = (Math.random() - 0.5) * 220;
+        F.sl[i] = 0.3 + Math.random() * 0.4;
+      }
+    }
+    for (let i = 0; i < F.sl.length; i++) {
+      if (F.sl[i] <= 0) continue;
+      F.sl[i] -= dt;
+      if (F.sl[i] <= 0) { F.sp[i * 3 + 1] = -9999; continue; }
+      F.sv[i * 3 + 1] -= 300 * dt;
+      F.sp[i * 3] += F.sv[i * 3] * dt; F.sp[i * 3 + 1] += F.sv[i * 3 + 1] * dt; F.sp[i * 3 + 2] += F.sv[i * 3 + 2] * dt;
+    }
+    F.sparks.geometry.getAttribute('position').needsUpdate = true;
+    for (const p of F.smoke) {
+      if (p.life <= 0) continue;
+      p.life -= dt;
+      p.s.position.y += 6 * dt;
+      const k = 4 + (2.2 - p.life) * 9;
+      p.s.scale.set(k, k, k);
+      p.s.material.opacity = Math.max(0, p.life / 2.2) * 0.45;
+      if (p.life <= 0) p.s.visible = false;
+    }
+    // Débris : retombent, rebondissent puis restent au bord
+    for (const d of F.debris) {
+      if (d.life <= 0) continue;
+      d.life -= dt;
+      const g = hAt(d.o.position.x, d.o.position.z) + 0.4;
+      if (d.o.position.y > g || d.vy > 0) {
+        d.vy -= 98 * dt;
+        d.o.position.x += d.vx * dt; d.o.position.y += d.vy * dt; d.o.position.z += d.vz * dt;
+        d.o.rotation.y += d.spin * dt; d.o.rotation.x += d.spin * 0.5 * dt;
+        if (d.o.position.y < g) { d.o.position.y = g; d.vy = -d.vy * 0.3; d.vx *= 0.6; d.vz *= 0.6; d.spin *= 0.5; if (Math.abs(d.vy) < 8) d.vy = 0; }
+      }
+      if (d.life <= 0) this.scene.remove(d.o);
+    }
+    F.debris = F.debris.filter((d) => d.life > 0);
+  };
+
+  // Voiture de sécurité : coupé argent avec rampe de gyrophares orange
+  Renderer3D.prototype.updateSC = function (race) {
+    const sc = race.sc;
+    if (!sc) { if (this.scCar) this.scCar.visible = false; return; }
+    if (!this.scCar || this.scCar.parent !== this.scene) {
+      const g = new T.Group();
+      const body = new T.MeshPhysicalMaterial({ color: 0xbfc4ca, metalness: 0.7, roughness: 0.3, clearcoat: 1 });
+      const dark = new T.MeshStandardMaterial({ color: 0x15171a, roughness: 0.2, metalness: 0.5 });
+      const b1 = new T.Mesh(new T.BoxGeometry(46, 6, 19), body); b1.position.y = 5; g.add(b1);
+      const b2 = new T.Mesh(new T.BoxGeometry(20, 5, 16), dark); b2.position.set(-4, 10, 0); g.add(b2);
+      const b3 = new T.Mesh(new T.BoxGeometry(14, 1.2, 14), body); b3.position.set(-5, 13, 0); g.add(b3);
+      this.scLights = [];
+      for (const z of [-4, -1.3, 1.3, 4]) {
+        const l = new T.Mesh(new T.BoxGeometry(2, 1, 2.4), new T.MeshStandardMaterial({ color: 0x552200, emissive: 0xff8a00, emissiveIntensity: 0 }));
+        l.position.set(-5, 14, z); g.add(l); this.scLights.push(l.material);
+      }
+      const tyre = new T.MeshStandardMaterial({ color: 0x1b1b1b, roughness: 0.9 });
+      for (const [x, z] of [[14, 8.5], [14, -8.5], [-15, 8.5], [-15, -8.5]]) {
+        const w = new T.Mesh(new T.CylinderGeometry(3.4, 3.4, 2.6, 20), tyre); w.rotation.x = Math.PI / 2; w.position.set(x, 3.4, z); g.add(w);
+      }
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      this.scene.add(g);
+      this.scCar = g;
+    }
+    const g = this.scCar, tr = race.track;
+    g.visible = true;
+    g.position.set(sc.x, tr.h ? tr.h[sc.idx] * 10 : 0, sc.y);
+    g.rotation.y = -sc.a;
+    const ph = Math.floor(performance.now() / 120) % 2;
+    this.scLights.forEach((m, k) => { m.emissiveIntensity = (k % 2) === ph ? 3 : 0.2; });
+  };
 
   F1.Renderer3D = Renderer3D;
 })();
