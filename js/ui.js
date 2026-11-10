@@ -250,7 +250,8 @@
         toggle('brake', 'Freinage assisté', 'Freine automatiquement avant les virages'),
         toggle('tc', 'Antipatinage / stabilité', 'Limite les dérapages et le patinage'),
         toggle('steer', 'Direction assistée', 'Aide à suivre la trajectoire'),
-        toggle('line', 'Trajectoire idéale', 'Ligne verte, rouge aux freinages'))));
+        toggle('line', 'Trajectoire idéale', 'Ligne verte, rouge aux freinages'),
+        toggle('autoPit', 'Stands automatiques', 'Sinon : vous gérez la vitesse dans la voie et l\'arrêt devant votre garage'))));
     parts.push(h('div', { class: 'row' },
       h('section', null, h('h3', null, 'Sensibilité de la direction'), seg(Object.entries(S.SENS).map(([k, v]) => [k, v.label]), st.sens, (v) => { S.set({ sens: v }); rerender(); })),
       h('section', null, h('h3', null, 'Aéro active'), seg(Object.entries(S.AERO), st.aero, (v) => { S.set({ aero: v }); rerender(); }))));
