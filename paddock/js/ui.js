@@ -154,6 +154,12 @@
     items.push(h('button', { class: 'home-btn', onclick: quickRace },
       h('span', { class: 'hb-title' }, 'Course rapide'),
       h('span', { class: 'hb-sub' }, 'Circuit, écurie, pilote, météo et aides')));
+    items.push(h('button', { class: 'home-btn', onclick: timeTrial },
+      h('span', { class: 'hb-title' }, 'Contre-la-montre'),
+      h('span', { class: 'hb-sub' }, 'Seul en piste contre votre fantôme')));
+    items.push(h('button', { class: 'home-btn', onclick: recordsScreen },
+      h('span', { class: 'hb-title' }, 'Records et défis'),
+      h('span', { class: 'hb-sub' }, 'Meilleurs tours, victoires et défis réussis')));
     items.push(h('button', { class: 'home-btn', onclick: () => settingsScreen(home) },
       h('span', { class: 'hb-title' }, 'Aides et commandes'),
       h('span', { class: 'hb-sub' }, 'Sensibilité, aides au pilotage, aéro active')));
@@ -203,6 +209,62 @@
         trackCanvas(gp, 90, 60)));
     });
     show(card('Course rapide', backBtn(home), stepper(0), h('h3', null, 'Choisissez le circuit'), list));
+  }
+
+  // ---------- Contre-la-montre ----------
+  function timeTrial() {
+    const R = F1.Records.all();
+    const list = h('div', { class: 'circuit-list' });
+    F1.CALENDAR.forEach((gp, i) => {
+      const ghost = F1.Ghost.get(gp.id);
+      const best = R[gp.id] && R[gp.id].lap;
+      list.appendChild(h('button', { class: 'circuit-row', onclick: () => startTimeTrial(gp) },
+        h('span', { class: 'cr-flag' }, gp.flag),
+        h('span', { class: 'cr-body' },
+          h('span', { class: 'cr-name' }, gp.gp.replace('Grand Prix ', 'GP ')),
+          h('span', { class: 'cr-meta' }, `${gp.circuit} · ${best ? 'record ' + fmt(best) : 'pas encore de temps'}${ghost ? ' · 👻 fantôme ' + fmt(ghost.time) : ''}`)),
+        h('span', { class: 'cr-round' }, `${i + 1}`),
+        trackCanvas(gp, 90, 60)));
+    });
+    show(card('Contre-la-montre', backBtn(home),
+      h('p', { class: 'hint' }, `Seul en piste avec la ${teamById(qs.team).name} de ${(F1.DRIVERS2026.find((d) => d.id === qs.driver) || {}).last || ''} (choisie en course rapide). Votre meilleur tour devient un fantôme translucide à battre.`),
+      list));
+  }
+  function startTimeTrial(gp) {
+    const c = quickCareer();
+    c.round = F1.CALENDAR.indexOf(gp);
+    F1.Session.start({
+      gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver), maxAttempts: 99, weather: 'dry',
+      title: 'Contre-la-montre', qLabel: 'Contre-la-montre · tour lancé', timeTrial: true,
+      onEnd: () => timeTrial(),
+    });
+  }
+
+  // ---------- Records et défis ----------
+  function recordsScreen() {
+    const R = F1.Records.all(), T = F1.Records.totals(), D = F1.Challenges.done();
+    const rows = F1.CALENDAR.map((gp) => {
+      const r = R[gp.id] || {};
+      const ch = Object.keys(D).filter((k) => k.startsWith(gp.id + ':')).length;
+      return h('tr', null,
+        h('td', null, `${gp.flag} ${gp.gp.replace('Grand Prix ', '')}`),
+        h('td', { class: 'rec' }, r.lap ? fmt(r.lap) : '—'),
+        h('td', { class: 'rec hide-sm' }, r.raceLap ? fmt(r.raceLap) : '—'),
+        h('td', null, r.races ? `${r.wins || 0} / ${r.podiums || 0} / ${r.races}` : '—'),
+        h('td', { class: 'hide-sm' }, r.bestPos ? `P${r.bestPos}` : '—'),
+        h('td', null, ch ? '⭐'.repeat(Math.min(5, ch)) : ''));
+    });
+    show(card('Records et défis', backBtn(home),
+      h('div', { class: 'totals' },
+        h('div', null, h('b', null, String(T.races)), 'courses'),
+        h('div', null, h('b', null, String(T.wins)), 'victoires'),
+        h('div', null, h('b', null, String(T.podiums)), 'podiums'),
+        h('div', null, h('b', null, String(T.dnfs)), 'abandons'),
+        h('div', null, h('b', null, String(T.challenges)), 'défis réussis')),
+      h('div', { class: 'table-wrap' }, h('table', { class: 'results-table records-table' },
+        h('thead', null, h('tr', null, h('th', null, 'Circuit'), h('th', null, 'Meilleur tour'), h('th', { class: 'hide-sm' }, 'Tour en course'), h('th', null, 'Vict. / podiums / courses'), h('th', { class: 'hide-sm' }, 'Meilleur'), h('th', null, 'Défis'))),
+        h('tbody', null, rows))),
+      h('p', { class: 'hint' }, 'Les records sont gardés sur cet appareil. Un défi du week-end est proposé au départ de chaque course selon votre place sur la grille.')));
   }
 
   function quickTeam() {
@@ -276,6 +338,8 @@
       h('section', null, h('h3', null, 'Dégâts'), seg(Object.entries(S.DAMAGE), st.damage, (v) => { S.set({ damage: v }); rerender(); }),
         h('p', { class: 'hint' }, "Toucher un mur ou une autre voiture abîme l'aileron avant, l'aileron arrière ou la suspension : la voiture tourne moins bien et va moins vite. Les ailerons sont changés à l'arrêt au stand (quelques secondes de plus), la suspension non.")),
       h('section', null, h('h3', null, 'Pneus de départ'), seg([['S', '🔴 Tendres'], ['M', '🟡 Médiums'], ['H', '⚪ Durs']], st.startTyre, (v) => { S.set({ startTyre: v }); rerender(); }))));
+    parts.push(h('section', null, h('h3', null, "Radio de l'ingénieur"), seg(Object.entries(S.RADIO), st.radio, (v) => { S.set({ radio: v }); rerender(); }),
+      h('p', { class: 'hint' }, 'Écarts, pneus, météo, drapeaux et dégâts annoncés pendant la course (voix française de votre appareil).')));
     parts.push(h('p', { class: 'hint' }, 'Arrêts au stand : bouton STAND / touche B pour rentrer au prochain passage, puis choix de la gomme (T, M, D, I ou touches 1 à 4). Usure calculée sur la distance de la course : une course courte demande quand même un arrêt. Sous la pluie, il faut des pneus intermédiaires (I).'));
     parts.push(h('p', { class: 'hint' }, 'Batterie : elle se vide en accélérant et se recharge au freinage. ⚡ / touche E : boost (plus de puissance, vide la batterie plus vite). Aéro active manuelle : bouton AÉRO / Espace dans les lignes droites ; elle se referme au freinage.'));
     return parts;
@@ -467,6 +531,7 @@
     show(card(`${gp.flag} ${gp.gp}`,
       h('p', { class: 'subtitle' }, me ? (me.dnf ? 'Abandon.' : `Vous terminez P${me.pos}${me.pts ? ` (+${me.pts} pts)` : ''}.`) : ''),
       res.fastest ? h('p', { class: 'subtitle' }, `Meilleur tour : ${C.fullName(C.driver(c, res.fastest))} en ${fmt(res.fastestTime)}`) : null,
+      res.challenge ? h('p', { class: 'challenge-line ' + (res.challenge.ok ? 'ok' : 'ko') }, `${res.challenge.ok ? '⭐ Défi réussi' : '✘ Défi manqué'} : ${res.challenge.text}`) : null,
       h('div', { class: 'table-wrap' }, h('table', { class: 'results-table' },
         h('thead', null, h('tr', null, h('th', null, 'Pos'), h('th', null, 'Pilote'), h('th', { class: 'hide-sm' }, 'Écurie'), h('th', { class: 'hide-sm' }, 'Grille'), h('th', null, 'Temps'), h('th', { class: 'hide-sm' }, 'Arrêts'), h('th', null, 'Pts'))),
         tbody)),

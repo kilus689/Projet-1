@@ -186,6 +186,7 @@
         this.carDamage(c, m, dt);
       }
       this.updateSC(race);
+      this.updateGhost(race);
       this.updateFx(race, dt);
 
       if (this.world.racingLine) this.world.racingLine.visible = !!(race.assists && race.assists.line);
@@ -367,6 +368,29 @@
       if (d.life <= 0) this.scene.remove(d.o);
     }
     F.debris = F.debris.filter((d) => d.life > 0);
+  };
+
+  // Fantôme du contre-la-montre : la même voiture, translucide
+  Renderer3D.prototype.updateGhost = function (race) {
+    const g = race.ghost;
+    if (!g) { if (this.ghostCar) this.ghostCar.g.visible = false; return; }
+    if (!this.ghostCar || this.ghostCar.g.parent !== this.scene) {
+      const m = X.makeCar(g.team, g.num || 1, false, 1);
+      m.g.traverse((o) => {
+        if (!o.isMesh) return;
+        o.material = o.material.clone();
+        o.material.transparent = true; o.material.opacity = 0.32; o.material.depthWrite = false;
+        o.castShadow = false;
+      });
+      this.scene.add(m.g);
+      this.ghostCar = m;
+    }
+    const tr = race.track, i = tr.nearest(g.x, g.y, this.ghostIdx == null ? -1 : this.ghostIdx);
+    this.ghostIdx = i;
+    const m = this.ghostCar;
+    m.g.visible = true;
+    m.g.position.set(g.x, tr.h ? tr.h[i] * 10 : 0, g.y);
+    m.g.rotation.y = -g.a;
   };
 
   // Voiture de sécurité : coupé argent avec rampe de gyrophares orange

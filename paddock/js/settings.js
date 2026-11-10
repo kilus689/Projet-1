@@ -10,6 +10,7 @@
     difficulty: 'normal', // difficulté de l'IA
     tyreWear: 'normal',   // usure des pneus : off | normal | high
     damage: 'normal',     // dégâts : off | normal | high
+    radio: 'voice',       // radio de l'ingénieur : voice | text | off
     setup: { wing: 3, gear: 3, susp: 3 }, // réglages de la voiture (1 à 5)
     startTyre: 'M',       // pneus de départ du joueur : S | M | H
     assists: { brake: false, tc: true, steer: false, line: false, autoPit: false },
@@ -48,6 +49,7 @@
     },
     WEAR: { off: 'Désactivée', normal: 'Normale', high: 'Forte' },
     DAMAGE: { off: 'Aucun', normal: 'Réduits', high: 'Réalistes' },
+    RADIO: { voice: '🔊 Voix + texte', text: '💬 Texte seul', off: 'Désactivée' },
     WEATHER_CHOICES: { dry: '☀️ Sec', cloudy: '☁️ Nuageux', rain: '🌧️ Pluie', changing: '🌦️ Changeante', random: '🎲 Aléatoire' },
     // Probabilité de pluie par circuit (carrière et météo aléatoire)
     RAIN: { 'be-1925': 0.35, 'br-1940': 0.3, 'gb-1948': 0.3, 'jp-1962': 0.25, 'sg-2008': 0.2, 'ca-1978': 0.2, 'hu-1986': 0.15, 'nl-1948': 0.2, 'at-1969': 0.2, 'mc-1929': 0.12, 'au-1953': 0.15, 'cn-2004': 0.2, 'us-2022': 0.15, 'it-1922': 0.1, 'es-1991': 0.08, 'es-2026': 0.08, 'mx-1962': 0.12, 'us-2012': 0.1 },
