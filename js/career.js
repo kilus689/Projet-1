@@ -165,10 +165,56 @@
     return { order, times };
   };
 
-  C.simRace = function (c, gp, grid, weather) {
-    const wet = weather === 'rain';
-    const r = rng(c.seed + c.round * 977 + c.season * 7);
-    const laps = gp.laps;
+  // ---------- Qualifications en trois séances (Q1, Q2, Q3) ----------
+  // Q1 : 22 voitures, 6 éliminées · Q2 : 16 voitures, 6 éliminées · Q3 : 10 voitures pour la pole
+  C.Q_CUTS = [16, 10, 10];
+  C.simQualiSeg = function (c, gp, seg, ids, playerTime) {
+    const diff = F1.DIFFICULTIES[c.difficulty] || F1.DIFFICULTIES.normal;
+    const ref = F1.refLapTime(F1.getTrack(gp));
+    const r = rng(c.seed + c.round * 101 + c.season + seg * 7919);
+    const times = {};
+    for (const id of ids) {
+      const d = C.driver(c, id), t = C.team(c, d.team), p = C.perf01(t, d);
+      // La piste s'améliore (plus de gomme) d'une séance à l'autre
+      times[id] = ref * diff.quali * (1.004 + (1 - p) * 0.045 + gauss(r) * 0.0035) * (1 - 0.0015 * seg);
+    }
+    if (playerTime != null && ids.includes(c.playerDriver)) times[c.playerDriver] = playerTime;
+    const order = ids.slice().sort((a, b) => times[a] - times[b]);
+    return { order, times };
+  };
+  // Assemble la grille à partir des trois séances : [Q3 top 10, Q2 11-16, Q1 17-22]
+  C.gridFromSegs = function (segs) {
+    const order = [], times = {};
+    const n = segs.length;
+    for (let k = n - 1; k >= 0; k--) {
+      const keep = k === n - 1 ? segs[k].order : segs[k].order.slice(C.Q_CUTS[k]);
+      for (const id of keep) if (!order.includes(id)) { order.push(id); times[id] = segs[k].times[id]; }
+    }
+    return { order, times, segs: segs.map((s) => s.order.length) };
+  };
+
+  // ---------- Week-ends sprint 2026 ----------
+  C.SPRINTS = ['cn-2004', 'us-2022', 'ca-1978', 'gb-1948', 'nl-1948', 'sg-2008'];
+  C.SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
+  C.isSprint = (gp) => C.SPRINTS.includes(gp.id);
+  C.sprintLaps = (gp) => Math.round(gp.laps / 3);
+  C.applySprint = function (c, result) {
+    c.sprints = c.sprints || [];
+    const rows = result.order.map((o, i) => {
+      const pts = !o.dnf && i < C.SPRINT_POINTS.length ? C.SPRINT_POINTS[i] : 0;
+      const d = C.driver(c, o.id);
+      c.points.drivers[o.id] = (c.points.drivers[o.id] || 0) + pts;
+      c.points.teams[d.team] = (c.points.teams[d.team] || 0) + pts;
+      return { id: o.id, team: d.team, pos: i + 1, pts, dnf: !!o.dnf, gap: o.gap, time: o.time };
+    });
+    c.sprints.push({ round: c.round, race: rows });
+    return rows;
+  };
+
+  C.simRace = function (c, gp, grid, weather, lapsOverride) {
+    const wet = weather === 'rain' || weather === 'changing';
+    const r = rng(c.seed + c.round * 977 + c.season * 7 + (lapsOverride || 0));
+    const laps = lapsOverride || gp.laps;
     const ref = F1.refLapTime(F1.getTrack(gp));
     const rows = grid.map((id, g) => {
       const d = C.driver(c, id);
@@ -210,6 +256,7 @@
     });
 
     // Finances et développement
+    if (c.mode === 'team') C.deliverResearch(c);
     const r = rng(c.seed + c.round * 31 + c.season * 3);
     for (const t of c.teams) {
       const pts = rows.filter((x) => x.team === t.id).reduce((s, x) => s + x.pts, 0);
@@ -254,6 +301,60 @@
     t.budget = Math.round((t.budget - cost) * 10) / 10;
     t[area] = Math.min(99, t[area] + 1.2);
     c.upgrades[area] = (c.upgrades[area] || 0) + 1;
+    C.save(c);
+    return true;
+  };
+
+  // ---------- Recherche et développement, plafond budgétaire ----------
+  C.CAP = 60; // dépenses de développement autorisées par saison (M€)
+  C.RND = {
+    small: { label: 'Évolution', cost: 1, gain: 1.0, delay: 1 },
+    big: { label: 'Gros projet', cost: 2.6, gain: 3.0, delay: 3 },
+  };
+  C.spent = (c) => c.spent || 0;
+  C.rndCost = (c, area, size) => Math.round(C.upgradeCost(c, area) * C.RND[size].cost * 10) / 10;
+  C.startResearch = function (c, area, size) {
+    const t = C.team(c, c.playerTeam);
+    const cost = C.rndCost(c, area, size);
+    if (t.budget < cost || C.spent(c) + cost > C.CAP) return false;
+    t.budget = Math.round((t.budget - cost) * 10) / 10;
+    c.spent = Math.round((C.spent(c) + cost) * 10) / 10;
+    c.upgrades[area] = (c.upgrades[area] || 0) + 1;
+    c.rnd = c.rnd || [];
+    c.rnd.push({ area, size, gain: C.RND[size].gain * (0.85 + Math.random() * 0.3), due: c.round + C.RND[size].delay });
+    C.save(c);
+    return true;
+  };
+  // Les projets arrivent sur la voiture au bout de quelques Grands Prix
+  C.deliverResearch = function (c) {
+    if (!c.rnd || !c.rnd.length) return;
+    const t = C.team(c, c.playerTeam);
+    const ready = c.rnd.filter((p) => c.round >= p.due);
+    c.rnd = c.rnd.filter((p) => c.round < p.due);
+    for (const p of ready) {
+      t[p.area] = Math.min(99, t[p.area] + p.gain);
+      c.news.push(`Nouvelle pièce (${C.UPGRADES[p.area].label.toLowerCase()}) : +${p.gain.toFixed(1)}.`);
+    }
+  };
+
+  // ---------- Marché des pilotes (mode écurie) ----------
+  C.signCost = (c, d) => {
+    const rating = C.driverRating(d);
+    const base = Math.max(1, (rating - 68) * 0.7);
+    return Math.round((d.team ? base * 1.6 : base) * 10) / 10; // indemnité de transfert si sous contrat
+  };
+  C.market = (c) => c.drivers.filter((d) => d.team !== c.playerTeam).sort((a, b) => C.driverRating(b) - C.driverRating(a));
+  C.signDriver = function (c, id, replaceId) {
+    const t = C.team(c, c.playerTeam);
+    const d = C.driver(c, id), out = C.driver(c, replaceId);
+    const cost = C.signCost(c, d);
+    if (!d || !out || out.team !== t.id || t.budget < cost) return false;
+    t.budget = Math.round((t.budget - cost) * 10) / 10;
+    const from = d.team;
+    out.team = from || null;
+    d.team = t.id;
+    if (c.playerDriver === out.id) c.playerDriver = d.id;
+    c.news.push(`${C.fullName(d)} signe chez ${t.name}${from ? '' : ' (pilote libre)'} ; ${C.fullName(out)} ${from ? 'part chez ' + C.team(c, from).name : 'quitte l\'écurie'}.`);
     C.save(c);
     return true;
   };
@@ -313,6 +414,8 @@
     c.round = 0;
     c.results = [];
     c.upgrades = {};
+    c.spent = 0;
+    c.sprints = [];
     c.points = C.emptyPoints(c);
     C.save(c);
   };

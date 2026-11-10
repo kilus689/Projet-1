@@ -233,6 +233,22 @@
     show(card(t.name, backBtn(quickTeam, 'Écuries'), stepper(2), h('h3', null, 'Choisissez votre pilote'), carPhoto(t, 320, 180, 'hero'), g));
   }
 
+  // Réglages de la voiture (aileron, rapports, suspension)
+  function setupPanel(rerender, gp) {
+    const S = F1.Settings, su = S.get().setup;
+    const hint = gp ? S.setupHint(F1.getTrack(gp)) : null;
+    const row = (key, label, lo, hi) => h('section', null, h('h3', null, label),
+      seg([1, 2, 3, 4, 5].map((v) => [v, String(v)]), su[key], (v) => { S.set({ setup: { [key]: v } }); rerender(); }),
+      h('p', { class: 'hint' }, `1 : ${lo} · 5 : ${hi}`));
+    return h('section', { class: 'setup' }, h('h3', null, '🔧 Réglages de la voiture'),
+      hint ? h('p', { class: 'hint' }, `Conseil pour ${gp.circuit} : aileron ${hint.wing}, rapports ${hint.gear}. `,
+        h('button', { class: 'small-btn', onclick: () => { S.set({ setup: { wing: hint.wing, gear: hint.gear } }); rerender(); } }, 'Appliquer le conseil')) : null,
+      h('div', { class: 'row' },
+        row('wing', 'Aileron (appui)', 'vitesse de pointe', 'adhérence en virage'),
+        row('gear', 'Rapports de boîte', 'accélération', 'vitesse de pointe'),
+        row('susp', 'Suspension', 'souple (pluie, vibreurs)', 'ferme (direction vive)')));
+  }
+
   // Bloc de réglages partagé (course rapide, carrière, accueil)
   function settingsPanel(rerender, opts) {
     const S = F1.Settings, st = S.get();
@@ -274,14 +290,17 @@
       h('p', { class: 'summary' }, `${gp.flag} ${gp.gp} · ${t.name} · ${d.flag} ${d.first} ${d.last} (#${d.num})`),
       h('p', { class: 'pole-ref' }, `⏱ ${F1.Settings.poleText(gp)}`),
       ...settingsPanel(quickSettings, { weather: true, difficulty: true }),
+      setupPanel(quickSettings, gp),
       h('div', { class: 'row' },
         h('section', null, h('h3', null, 'Distance'), seg(F1.RACE_LENGTHS.map((r) => [r.id, r.id.length <= 1 ? r.label : `${r.label} (${r.laps(gp)} t.)`]), qs.length, (v) => { qs.length = v; saveQs(); quickSettings(); })),
-        h('section', null, h('h3', null, 'Qualifications'), seg([['sim', 'Simulées'], ['play', 'Jouées']], qs.quali, (v) => { qs.quali = v; saveQs(); quickSettings(); }))),
+        h('section', null, h('h3', null, 'Qualifications'), seg([['sim', 'Simulées'], ['play', 'Q1 · Q2 · Q3 jouées']], qs.quali, (v) => { qs.quali = v; saveQs(); quickSettings(); }))),
       h('button', { class: 'primary big', onclick: startQuick }, 'Départ')));
   }
 
   function settingsScreen(back) {
-    show(card('Aides et commandes', backBtn(back), ...settingsPanel(() => settingsScreen(back), {}), liveryPanel(() => settingsScreen(back)), photoPanel(() => settingsScreen(back))));
+    const cur = C.load();
+    const gp = cur && !C.seasonOver(cur) ? C.gp(cur) : null;
+    show(card('Aides et commandes', backBtn(back), setupPanel(() => settingsScreen(back), gp), ...settingsPanel(() => settingsScreen(back), {}), liveryPanel(() => settingsScreen(back)), photoPanel(() => settingsScreen(back))));
   }
 
   // Livrées personnalisées : images du joueur, gardées uniquement sur cet appareil
@@ -362,13 +381,63 @@
         onEnd: (res) => { if (!res) return quickSettings(); showRaceResults(c, gp, res, quickSettings, q); },
       });
     };
-    if (qs.quali === 'play') {
+    if (qs.quali === 'play') qualiFlow(c, gp, weather, (q) => goGrid(q));
+    else go();
+    function goGrid(q) {
       F1.Session.start({
-        gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver), weather,
-        provisional: (t) => C.simQuali(c, gp, t).order.indexOf(c.playerDriver) + 1,
-        onEnd: (res) => go(res && res.time != null ? res.time : 9999),
+        gp, mode: 'race', laps: C.lapsFor(c, gp), entries: C.entries(c, q.order, c.playerDriver), allowRestart: true,
+        title: gp.gp, weather, playerTyre: F1.Settings.get().startTyre,
+        onEnd: (res) => { if (!res) return quickSettings(); showRaceResults(c, gp, res, quickSettings, q); },
       });
-    } else go();
+    }
+  }
+
+  // ---------- Qualifications Q1 / Q2 / Q3 ----------
+  function qualiFlow(c, gp, weather, done) {
+    const names = ['Q1', 'Q2', 'Q3'];
+    const segs = [];
+    let ids = C.grid(c).map((d) => d.id);
+    const finishSim = (from, cur) => {
+      for (let j = from; j < 3; j++) { const rr = C.simQualiSeg(c, gp, j, cur); segs.push(rr); cur = rr.order.slice(0, C.Q_CUTS[j]); }
+      done(C.gridFromSegs(segs));
+    };
+    const runSeg = (k) => {
+      F1.Session.start({
+        gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver), maxAttempts: 2, weather,
+        title: `${names[k]} · ${gp.gp}`, qLabel: `${names[k]} · tour lancé`,
+        provisional: (t) => C.simQualiSeg(c, gp, k, ids, t).order.indexOf(c.playerDriver) + 1,
+        onEnd: (res) => {
+          const r = C.simQualiSeg(c, gp, k, ids, res && res.time != null ? res.time : 9999);
+          segs.push(r);
+          const pos = r.order.indexOf(c.playerDriver) + 1;
+          const cut = k < 2 ? C.Q_CUTS[k] : 99;
+          const out = pos > cut;
+          showSeg(c, names[k], r, cut, out, k < 2 && !out ? `Passer en ${names[k + 1]}` : 'Voir la grille', () => {
+            if (k < 2 && !out) { ids = r.order.slice(0, cut); runSeg(k + 1); }
+            else if (k < 2) finishSim(k + 1, r.order.slice(0, cut));
+            else done(C.gridFromSegs(segs));
+          });
+        },
+      });
+    };
+    runSeg(0);
+  }
+
+  function showSeg(c, name, r, cut, out, nextLabel, next) {
+    const best = r.times[r.order[0]];
+    const tbody = h('tbody');
+    r.order.forEach((id, i) => {
+      const d = C.driver(c, id), t = C.team(c, d.team), tm = r.times[id];
+      tbody.appendChild(h('tr', { class: (id === c.playerDriver ? 'me' : '') + (i >= cut ? ' eliminated' : '') },
+        h('td', null, String(i + 1)),
+        h('td', null, h('span', { class: 'swatch', style: `background:${t.color}` }), `${d.flag} ${d.first} ${d.last}`),
+        h('td', null, tm > 9000 ? 'sans temps' : i === 0 ? fmt(tm) : `+${(tm - best).toFixed(3)}`)));
+    });
+    show(card(`${name} · résultats`,
+      h('p', { class: 'subtitle' }, cut < 99 ? (out ? `Éliminé en ${name}. Les ${r.order.length - cut} derniers sont éliminés.` : `Qualifié ! Les ${cut} premiers passent à la séance suivante.`) : 'Séance finale : la pole position se joue ici.'),
+      h('div', { class: 'table-wrap' }, h('table', { class: 'results-table' },
+        h('thead', null, h('tr', null, h('th', null, 'Pos'), h('th', null, 'Pilote'), h('th', null, 'Temps'))), tbody)),
+      h('button', { class: 'primary big', onclick: next }, nextLabel)));
   }
 
   // Résultats d'une course (rapide ou carrière)
@@ -652,21 +721,48 @@
     const pickDriver = c.mode === 'team' && !wk ? h('section', null, h('h3', null, 'Pilote que vous contrôlez'),
       seg(mates.map((d) => [d.id, `${d.flag} ${d.first} ${d.last}`]), c.playerDriver, (v) => { c.playerDriver = v; C.save(c); hub(c); })) : null;
 
-    const qualiBox = h('div', { class: 'step' + (wk ? ' done' : '') },
-      h('div', { class: 'step-title' }, '1. Qualifications'),
-      wk ? h('div', null,
-        h('p', null, `Pole position : ${C.fullName(C.driver(c, wk.quali.order[0]))} (${fmt(wk.quali.times[wk.quali.order[0]])})`),
-        h('p', null, h('b', null, `Vous partez P${wk.quali.order.indexOf(c.playerDriver) + 1}`), ` · ${wk.quali.times[c.playerDriver] < 9000 ? fmt(wk.quali.times[c.playerDriver]) : 'sans temps'}`),
+    const sprint = C.isSprint(gp);
+    const W = wk || {};
+    const hasQ = !!W.quali;
+    let n = 0;
+    const step = (done, locked, title, body) => h('div', { class: 'step' + (done ? ' done' : '') + (locked ? ' locked' : '') }, h('div', { class: 'step-title' }, `${++n}. ${title}`), body);
+
+    const practiceBox = step(W.practice || hasQ, false, 'Essais libres',
+      W.practice ? h('p', null, '✔ Réglages affinés : votre voiture sera un peu plus efficace en course.')
+        : h('div', { class: 'step-btns' },
+          h('button', { class: 'primary', disabled: hasQ, onclick: () => playPractice(c) }, 'Rouler en essais libres'),
+          h('button', { onclick: () => settingsScreen(() => hub(c, 'weekend')) }, '🔧 Réglages de la voiture')));
+
+    let sprintBoxes = [];
+    if (sprint) {
+      const sq = W.squali, sr = W.sprint;
+      sprintBoxes = [
+        step(!!sq, false, 'Qualifications sprint',
+          sq ? h('p', null, h('b', null, `Départ du sprint : P${sq.order.indexOf(c.playerDriver) + 1}`), ` · pole ${C.fullName(C.driver(c, sq.order[0]))}`)
+            : h('div', { class: 'step-btns' },
+              h('button', { class: 'primary', onclick: () => playSprintQuali(c) }, 'Jouer'),
+              h('button', { onclick: () => { c.weekend = Object.assign(c.weekend || {}, { squali: C.simQuali(c, gp) }); C.save(c); hub(c, 'weekend'); } }, 'Simuler'))),
+        step(!!sr, !sq, `Course sprint · ${sprintPlayed(c, gp)} tour(s) joués (${C.sprintLaps(gp)} en simulation)`,
+          sr ? h('p', null, h('b', null, `Sprint : P${sr.find((x) => x.id === c.playerDriver).pos}`), ` · +${sr.find((x) => x.id === c.playerDriver).pts} pt(s) · vainqueur ${C.fullName(C.driver(c, sr[0].id))}`)
+            : h('div', { class: 'step-btns' },
+              h('button', { class: 'primary', disabled: !sq, onclick: () => playSprint(c) }, 'Jouer le sprint'),
+              h('button', { disabled: !sq, onclick: () => endSprint(c, C.simRace(c, gp, W.squali.order, weatherFor(c), C.sprintLaps(gp))) }, 'Simuler'))),
+      ];
+    }
+    const qLocked = sprint && !W.sprint;
+    const qualiBox = step(hasQ, qLocked, 'Qualifications (Q1 · Q2 · Q3)',
+      hasQ ? h('div', null,
+        h('p', null, `Pole position : ${C.fullName(C.driver(c, W.quali.order[0]))} (${fmt(W.quali.times[W.quali.order[0]])})`),
+        h('p', null, h('b', null, `Vous partez P${W.quali.order.indexOf(c.playerDriver) + 1}`), ` · ${W.quali.times[c.playerDriver] < 9000 ? fmt(W.quali.times[c.playerDriver]) : 'sans temps'}`),
         h('button', { onclick: () => showGrid(c) }, 'Voir la grille'))
         : h('div', { class: 'step-btns' },
-          h('button', { class: 'primary', onclick: () => playQuali(c) }, 'Jouer les qualifications'),
-          h('button', { onclick: () => { setQuali(c, C.simQuali(c, gp)); showGrid(c); } }, 'Simuler')));
+          h('button', { class: 'primary', disabled: qLocked, onclick: () => playQuali(c) }, 'Jouer Q1 · Q2 · Q3'),
+          h('button', { disabled: qLocked, onclick: () => { setQuali(c, C.simQuali(c, gp)); showGrid(c); } }, 'Simuler')));
 
-    const raceBox = h('div', { class: 'step' + (wk ? '' : ' locked') },
-      h('div', { class: 'step-title' }, `2. Course · ${laps} tour${laps > 1 ? 's' : ''} joués (${gp.laps} en simulation)`),
+    const raceBox = step(false, !hasQ, `Course · ${laps} tour${laps > 1 ? 's' : ''} joués (${gp.laps} en simulation)`,
       h('div', { class: 'step-btns' },
-        h('button', { class: 'primary', disabled: !wk, onclick: () => playRace(c) }, 'Jouer la course'),
-        h('button', { disabled: !wk, onclick: () => simRace(c) }, 'Simuler la course')));
+        h('button', { class: 'primary', disabled: !hasQ, onclick: () => playRace(c) }, 'Jouer la course'),
+        h('button', { disabled: !hasQ, onclick: () => simRace(c) }, 'Simuler la course')));
 
     return h('div', { class: 'weekend' },
       h('div', { class: 'gp-head' },
@@ -677,24 +773,58 @@
           h('div', { class: 'pole-ref' }, `⏱ ${F1.Settings.poleText(gp)}`),
           h('button', { class: 'small-btn', onclick: () => settingsScreen(() => hub(c, 'weekend')) }, '⚙️ Aides et commandes')),
         trackCanvas(gp, 260, 170, team.color)),
-      pickDriver, qualiBox, raceBox);
+      sprint ? h('p', { class: 'hint' }, '⚡ Week-end sprint : qualifications sprint et course sprint (points pour les 8 premiers : 8, 7, 6, 5, 4, 3, 2, 1) avant les qualifications du Grand Prix.') : null,
+      pickDriver, practiceBox, ...sprintBoxes, qualiBox, raceBox);
   }
 
   function setQuali(c, q) {
-    c.weekend = { quali: q };
+    c.weekend = Object.assign(c.weekend || {}, { quali: q });
     C.save(c);
   }
 
   function playQuali(c) {
     const gp = C.gp(c);
+    qualiFlow(c, gp, weatherFor(c), (q) => { setQuali(c, q); showGrid(c); });
+  }
+
+  // Essais libres : roulage libre (5 tours chronométrés au plus), affine les réglages
+  function playPractice(c) {
+    const gp = C.gp(c);
     F1.Session.start({
-      gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver), maxAttempts: 3, weather: weatherFor(c),
+      gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver), maxAttempts: 5, weather: weatherFor(c),
+      title: 'Essais libres', qLabel: 'Essais libres · tour lancé',
+      onEnd: () => { c.weekend = Object.assign(c.weekend || {}, { practice: true }); C.save(c); hub(c, 'weekend'); },
+    });
+  }
+
+  const sprintPlayed = (c, gp) => Math.max(1, Math.round(C.lapsFor(c, gp) * 0.4));
+  function playSprintQuali(c) {
+    const gp = C.gp(c);
+    F1.Session.start({
+      gp, mode: 'quali', entries: C.entries(c, [c.playerDriver], c.playerDriver), maxAttempts: 2, weather: weatherFor(c),
+      title: 'Qualifications sprint', qLabel: 'Qualifs sprint · tour lancé',
       provisional: (t) => C.simQuali(c, gp, t).order.indexOf(c.playerDriver) + 1,
       onEnd: (res) => {
-        setQuali(c, C.simQuali(c, gp, res && res.time != null ? res.time : 9999));
-        showGrid(c);
+        c.weekend = Object.assign(c.weekend || {}, { squali: C.simQuali(c, gp, res && res.time != null ? res.time : 9999) });
+        C.save(c);
+        hub(c, 'weekend');
       },
     });
+  }
+  function playSprint(c) {
+    const gp = C.gp(c);
+    F1.Session.start({
+      gp, mode: 'race', laps: sprintPlayed(c, gp), entries: C.entries(c, c.weekend.squali.order, c.playerDriver), title: `Sprint · ${gp.gp}`, weather: weatherFor(c), playerTyre: F1.Settings.get().startTyre,
+      practice: !!c.weekend.practice,
+      onEnd: (res) => endSprint(c, res),
+    });
+  }
+  function endSprint(c, res) {
+    const gp = C.gp(c);
+    const rows = C.applySprint(c, res);
+    c.weekend.sprint = rows;
+    C.save(c);
+    showRaceResults(c, gp, res, () => hub(c, 'weekend'), c.weekend.squali, rows);
   }
 
   function showGrid(c) {
@@ -730,6 +860,7 @@
     const grid = c.weekend.quali.order;
     F1.Session.start({
       gp, mode: 'race', laps: C.lapsFor(c, gp), entries: C.entries(c, grid, c.playerDriver), title: gp.gp, weather: weatherFor(c), playerTyre: F1.Settings.get().startTyre,
+      practice: !!c.weekend.practice,
       onEnd: (res) => finishRace(c, gp, res),
     });
   }
@@ -805,19 +936,42 @@
     for (const [k, v] of Object.entries(C.UPGRADES)) {
       let extra = null;
       if (c.mode === 'team') {
-        const cost = C.upgradeCost(c, k);
-        extra = h('button', { class: 'small-btn', disabled: t.budget < cost || t[k] >= 99, title: v.desc, onclick: () => { C.buyUpgrade(c, k); hub(c, 'team'); } }, `+ ${cost} M€`);
+        const btn = (size) => {
+          const cost = C.rndCost(c, k, size), R = C.RND[size];
+          const ok = t.budget >= cost && C.spent(c) + cost <= C.CAP && t[k] < 99;
+          return h('button', { class: 'small-btn', disabled: !ok, title: `${v.desc} · +${R.gain} environ, livré dans ${R.delay} GP`, onclick: () => { C.startResearch(c, k, size); hub(c, 'team'); } }, `${R.label} ${cost} M€`);
+        };
+        extra = h('span', { class: 'rnd-btns' }, btn('small'), btn('big'));
       }
       rows.push(bar(v.label, t[k], extra));
     }
     const parts = [
       h('section', null,
         h('h3', null, `Voiture · note ${C.carRating(t).toFixed(1)} · ${rank}e de la grille`),
-        c.mode === 'team' ? h('p', { class: 'hint' }, `Budget : ${t.budget.toFixed(1)} M€. Chaque amélioration ajoute +1,2 point ; son coût augmente à chaque achat de la saison. Les revenus dépendent du prestige et des points marqués.`) : null,
-        rows),
+        c.mode === 'team' ? h('p', { class: 'hint' }, `Budget : ${t.budget.toFixed(1)} M€ · Plafond budgétaire de développement : ${C.spent(c).toFixed(1)} / ${C.CAP} M€ cette saison. Une évolution (+1 environ) arrive au Grand Prix suivant, un gros projet (+3 environ) au bout de 3 Grands Prix. Les coûts augmentent à chaque projet. Les revenus dépendent du prestige et des points marqués.`) : null,
+        rows,
+        c.mode === 'team' && c.rnd && c.rnd.length ? h('div', { class: 'rnd-list' }, h('b', null, 'En développement : '),
+          c.rnd.map((p) => `${C.UPGRADES[p.area].label} (${C.RND[p.size].label.toLowerCase()}, dans ${Math.max(1, p.due - c.round)} GP)`).join(' · ')) : null),
       h('section', null, h('h3', null, 'Pilotes'),
         h('div', { class: 'driver-grid' }, drivers.map((d) => driverCard(d, t, {})))),
     ];
+    if (c.mode === 'team') {
+      // Marché des pilotes : recruter un pilote libre ou racheter le contrat d'un pilote d'une autre écurie
+      const list = C.market(c).slice(0, 14).map((d) => {
+        const from = d.team ? C.team(c, d.team) : null;
+        const cost = C.signCost(c, d);
+        return h('div', { class: 'market-row', style: `--team:${from ? from.color : '#777'}` },
+          h('span', { class: 'mk-name' }, `${d.flag} ${d.first} ${d.last}`),
+          h('span', { class: 'mk-meta' }, `${from ? from.name : 'Libre'} · vitesse ${Math.round(d.pace)} · course ${Math.round(d.craft)}`),
+          h('span', { class: 'mk-cost' }, `${cost} M€`),
+          drivers.map((out) => h('button', { class: 'small-btn', disabled: t.budget < cost, onclick: () => {
+            if (confirm(`Recruter ${d.first} ${d.last} pour ${cost} M€ à la place de ${out.first} ${out.last} ?`)) { C.signDriver(c, d.id, out.id); hub(c, 'team'); }
+          } }, `Remplacer ${out.last}`)));
+      });
+      parts.push(h('section', null, h('h3', null, 'Marché des pilotes'),
+        h('p', { class: 'hint' }, "Un pilote libre coûte son salaire ; un pilote sous contrat coûte aussi une indemnité de transfert. Le pilote remplacé part dans l'écurie du pilote recruté (ou devient libre)."),
+        h('div', { class: 'market' }, list)));
+    }
     if (c.mode === 'driver') {
       const me = C.driver(c, c.playerDriver);
       const mate = drivers.find((d) => d.id !== me.id);

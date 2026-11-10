@@ -610,13 +610,17 @@
       const C0 = cond || F1.WEATHER.dry;
       const tf = this.tyreF || 1;
       const D = this.dmg;
+      // Réglages (joueur) : aileron 1 (peu d'appui) à 5 (beaucoup), rapports 1 (courts) à 5 (longs), suspension 1 (souple) à 5 (ferme)
+      const SU = this.setup;
+      const sW = SU ? SU.wing - 3 : 0, sG = SU ? SU.gear - 3 : 0, sS = SU ? SU.susp - 3 : 0;
+      const wetNow = 1 - (C0.grip - 0.62) / 0.38;
       // Aileron avant abîmé : moins d'appui à l'avant (sous-virage) ; arrière : moins de grip et de vitesse ; suspension : la voiture tire d'un côté
       const C = {
         // Air sale derrière une autre voiture : un peu moins d'appui dans les virages
-        grip: C0.grip * tf * (1 - 0.22 * D.fw - 0.16 * D.rw - 0.08 * D.sus) * (1 - 0.06 * this.tow * Math.min(1, Math.abs(track.k[this.idx] || 0) / 0.002)),
-        steer: C0.steer * (0.5 + 0.5 * tf) * (1 - 0.32 * D.fw - 0.1 * D.sus),
+        grip: C0.grip * tf * (1 + 0.018 * sW - 0.012 * sS * Math.max(0, wetNow)) * (1 - 0.22 * D.fw - 0.16 * D.rw - 0.08 * D.sus) * (1 - 0.06 * this.tow * Math.min(1, Math.abs(track.k[this.idx] || 0) / 0.002)),
+        steer: C0.steer * (0.5 + 0.5 * tf) * (1 + 0.025 * sS) * (1 - 0.32 * D.fw - 0.1 * D.sus),
         brake: C0.brake * (0.7 + 0.3 * tf) * (1 - 0.12 * D.fw),
-        accel: C0.accel * (0.8 + 0.2 * tf) * (1 - 0.1 * D.sus),
+        accel: C0.accel * (0.8 + 0.2 * tf) * (1 - 0.035 * sG) * (1 - 0.1 * D.sus),
         aero: C0.aero,
       };
       this.steer += (inp.steer - this.steer) * Math.min(1, dt * 10);
@@ -654,7 +658,7 @@
       const ers = deploy > 0 ? (this.boosting ? E.boostGain : E.gain) : this.battery <= 0.002 ? E.empty : 0;
       const pw = this.power * (1 + ers);
 
-      const maxS = P.maxSpeed * pw * (1 + 0.045 * aero + 0.025 * this.tow) * (1 - 0.05 * D.fw - 0.07 * D.rw - 0.08 * D.sus) * (this.offTrack ? P.offTrackMax : 1);
+      const maxS = P.maxSpeed * pw * (1 + 0.045 * aero + 0.025 * this.tow) * (1 - 0.011 * sW + 0.008 * sG) * (1 - 0.05 * D.fw - 0.07 * D.rw - 0.08 * D.sus) * (this.offTrack ? P.offTrackMax : 1);
       // Si la voiture recule (rebond sur un mur) et qu'on accélère : on freine d'abord le recul
       if (inp.throttle > 0 && vF < 0) vF = Math.min(0, vF + P.brake * inp.throttle * dt);
       if (inp.throttle > 0 && vF > -10) {
@@ -906,7 +910,7 @@
   // ---------- Course / qualification jouée ----------
   // entries : [{ id, name, code, num, team, isPlayer, skill, power }] dans l'ordre de la grille
   class Race {
-    constructor({ track, entries, laps, mode, weather, aeroMode, assists, tyreWear, playerTyre, damage }) {
+    constructor({ track, entries, laps, mode, weather, aeroMode, assists, tyreWear, playerTyre, damage, setup, practice }) {
       this.track = track;
       // Météo changeante : la pluie arrive en cours de course puis la piste sèche
       this.wetPlan = null;
@@ -946,6 +950,9 @@
         const car = new Car(Object.assign({ lanePref: (rand() - 0.5) * 24 }, e));
         car.grid = g + 1;
         car.dmgMul = this.dmgMul;
+        if (car.isPlayer && setup) car.setup = Object.assign({ wing: 3, gear: 3, susp: 3 }, setup);
+        // Essais libres faits : réglages affinés (+0,3 % de puissance utile)
+        if (car.isPlayer && practice) car.power *= 1.003;
         car.dmgEvents = this.events;
         car.wx = this.cond.ai;
         // Pneus de départ : intermédiaires sous la pluie, sinon tendres ou médiums (choix du joueur)
