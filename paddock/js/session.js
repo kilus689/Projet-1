@@ -260,10 +260,12 @@
     $('tv-banner').className = 'tv-banner';
     const isRace = o.mode === 'race';
     $('tv-lap').classList.toggle('hidden', !isRace);
-    $('tyre-panel').classList.toggle('hidden', !isRace || S.race.wearMul === 0 && S.race.weather !== 'rain');
+    $('tyre-panel').classList.toggle('hidden', !isRace);
     const tp = document.getElementById('touch-pit');
     if (tp) tp.classList.toggle('hidden', !isRace);
-    $('tv-wx').textContent = { dry: '☀️', cloudy: '☁️', rain: '🌧️' }[S.race.weather];
+    $('tv-wx').textContent = S.race.wetPlan ? '🌦️' : { dry: '☀️', cloudy: '☁️', rain: '🌧️' }[S.race.weather];
+    $('tv-flag').className = 'tv-flag hidden';
+    $('tp-pen').classList.add('hidden');
     updatePitPanel();
     if (isRace && S.race.player) {
       const p = S.race.player;
@@ -458,6 +460,14 @@
         el.className = v >= 0.5 ? 'bad' : v >= 0.15 ? 'warn' : v > 0.02 ? 'light' : '';
         el.title = `${F1.DAMAGE_PARTS[k]} : ${Math.round(v * 100)} %`;
       }
+      const win = F1.TYRE_TEMP[p.tyre] || F1.TYRE_TEMP.M, tc = Math.round(p.temp || 0);
+      const te = $('tp-temp');
+      te.textContent = tc + '°';
+      te.className = 'tp-temp ' + (tc < win[0] - 5 ? 'cold' : tc > win[1] + 5 ? 'hot' : 'ok');
+      te.title = `Température des pneus (idéale ${win[0]}–${win[1]} °C)`;
+      const pen = $('tp-pen');
+      pen.classList.toggle('hidden', !p.penalty);
+      if (p.penalty) pen.textContent = `Pénalité +${p.penalty} s`;
       $('tp-wear-val').textContent = p.pit ? (p.pit.phase === 'stop' ? 'Arrêt…' : 'Stands') : `${w} %`;
       const lead = race.standings()[0];
       $('tv-lap-txt').textContent = lead.finished ? 'ARRIVÉE' : `TOUR ${Math.max(1, Math.min(race.laps, lead.wrap + 1))}/${race.laps}`;
@@ -574,6 +584,17 @@
         } else if (ev.type === 'lap') {
           if (ev.car === p) toast(ev.lap === race.laps ? 'Dernier tour !' : `Tour ${ev.lap} · ${fmt(ev.time)}`);
           if (ev.lap === race.laps && race.standings()[0] === ev.car) tv('Course', 'Dernier tour', `${ev.car.name} mène la course`);
+        } else if (ev.type === 'weather') {
+          $('tv-wx').textContent = { dry: '☀️', cloudy: '☁️', rain: '🌧️' }[race.weather] || '🌦️';
+          if (ev.msg === 'rainStart') { tv('Météo', 'La pluie arrive', 'Pensez aux pneus intermédiaires', 'yellow'); toast('🌧️ La pluie commence à tomber', 'red'); }
+          else if (ev.msg === 'rain') toast('🌧️ Piste mouillée : intermédiaires conseillés', 'red');
+          else if (ev.msg === 'dry') { tv('Météo', 'La piste sèche', 'Retour aux pneus slicks', 'green'); toast('☀️ La piste sèche : slicks conseillés'); }
+        } else if (ev.type === 'warning') {
+          if (ev.car === p) toast(ev.count >= 3 ? `Limites de la piste : avertissement ${ev.count} (dernier avant pénalité)` : `Limites de la piste : avertissement ${ev.count}`, 'red');
+        } else if (ev.type === 'penalty') {
+          if (ev.car === p) { toast(`Pénalité +${ev.sec} s : ${ev.reason}`, 'red'); tv('Commissaires', `Pénalité de ${ev.sec} secondes`, `${p.name} · ${ev.reason}`, 'red'); audio.beep(220, 0.3, 0.15); }
+        } else if (ev.type === 'pitOvershoot') {
+          if (ev.car === p) toast('Garage dépassé : les mécaniciens repoussent la voiture (+3 s)', 'red');
         } else if (ev.type === 'flag') {
           const F = { yellow: ['DRAPEAU JAUNE', 'yellow'], vsc: ['VSC', 'yellow'], sc: ['SAFETY CAR', 'yellow'], green: ['', ''] }[ev.flag];
           const el = $('tv-flag');
@@ -600,7 +621,7 @@
             tv('Incident', ev.car.name, `${F1.DAMAGE_PARTS[ev.part]} endommagé${ev.part === 'sus' ? 'e' : ''}`, '');
           }
         } else if (ev.type === 'pitIn') {
-          if (ev.car === p) { toast('Entrée aux stands · limitation à 80 km/h'); updatePitPanel(); }
+          if (ev.car === p) { toast(race.pitManual ? 'Stands : sous 80 km/h à la ligne, freine devant ton garage' : 'Entrée aux stands · limitation à 80 km/h'); updatePitPanel(); }
         } else if (ev.type === 'pit') {
           const T = F1.TYRES[ev.tyre];
           const pos = race.standings().indexOf(ev.car) + 1;

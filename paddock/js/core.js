@@ -59,6 +59,8 @@
     H: { label: 'Dur', short: 'D', color: '#f2f2f2', grip: 0.975, life: 0.8 },
     I: { label: 'Intermédiaire', short: 'I', color: '#3ddc84', grip: 1.0, life: 0.65 },
   };
+  // Fenêtre de température idéale de chaque gomme (°C)
+  F1.TYRE_TEMP = { S: [85, 105], M: [90, 110], H: [95, 118], I: [55, 85] };
   F1.PIT_SPEED = 222; // 80 km/h dans la voie des stands
   // Batterie (ERS 2026) : fractions de batterie par seconde
   F1.ERS = { deploy: 0.03, boost: 0.085, harvestBrake: 0.12, harvestLift: 0.04, gain: 0.06, boostGain: 0.13, empty: -0.08 };
@@ -578,6 +580,7 @@
         tyre: 'M', wear: 0, tyreF: 1, stops: 0, pitReq: false, nextTyre: null, pit: null, prevProg: null,
         // Dégâts (0 = intact, 1 = détruit) : aileron avant, aileron arrière, suspension/carrosserie
         dmg: { fw: 0, rw: 0, sus: 0 }, dmgSide: 0, dmgMul: 0, dmgEvents: null,
+        temp: 70, tow: 0, penalty: 0, warnings: 0, limT: 0, limCool: 0, mistake: 0,
       }, o);
     }
 
@@ -609,7 +612,8 @@
       const D = this.dmg;
       // Aileron avant abîmé : moins d'appui à l'avant (sous-virage) ; arrière : moins de grip et de vitesse ; suspension : la voiture tire d'un côté
       const C = {
-        grip: C0.grip * tf * (1 - 0.22 * D.fw - 0.16 * D.rw - 0.08 * D.sus),
+        // Air sale derrière une autre voiture : un peu moins d'appui dans les virages
+        grip: C0.grip * tf * (1 - 0.22 * D.fw - 0.16 * D.rw - 0.08 * D.sus) * (1 - 0.06 * this.tow * Math.min(1, Math.abs(track.k[this.idx] || 0) / 0.002)),
         steer: C0.steer * (0.5 + 0.5 * tf) * (1 - 0.32 * D.fw - 0.1 * D.sus),
         brake: C0.brake * (0.7 + 0.3 * tf) * (1 - 0.12 * D.fw),
         accel: C0.accel * (0.8 + 0.2 * tf) * (1 - 0.1 * D.sus),
@@ -650,7 +654,7 @@
       const ers = deploy > 0 ? (this.boosting ? E.boostGain : E.gain) : this.battery <= 0.002 ? E.empty : 0;
       const pw = this.power * (1 + ers);
 
-      const maxS = P.maxSpeed * pw * (1 + 0.045 * aero) * (1 - 0.05 * D.fw - 0.07 * D.rw - 0.08 * D.sus) * (this.offTrack ? P.offTrackMax : 1);
+      const maxS = P.maxSpeed * pw * (1 + 0.045 * aero + 0.025 * this.tow) * (1 - 0.05 * D.fw - 0.07 * D.rw - 0.08 * D.sus) * (this.offTrack ? P.offTrackMax : 1);
       // Si la voiture recule (rebond sur un mur) et qu'on accélère : on freine d'abord le recul
       if (inp.throttle > 0 && vF < 0) vF = Math.min(0, vF + P.brake * inp.throttle * dt);
       if (inp.throttle > 0 && vF > -10) {
@@ -662,7 +666,8 @@
         if (vF > 5) vF = Math.max(0, vF - P.brake * C.brake * inp.brake * (0.45 + 0.55 * Math.min(1, vF / P.maxSpeed)) * dt);
         else vF = Math.max(-P.reverseMax, vF - P.accel * 0.45 * inp.brake * dt);
       }
-      vF -= vF * P.drag * (1 - 0.35 * aero) * dt;
+      // Aspiration : moins de traînée dans le sillage d'une voiture
+      vF -= vF * P.drag * (1 - 0.35 * aero) * (1 - 0.32 * this.tow) * dt;
       if (inp.throttle <= 0 && inp.brake <= 0) {
         const roll = 60 * dt;
         vF = Math.abs(vF) < roll ? 0 : vF - Math.sign(vF) * roll;
@@ -828,6 +833,26 @@
         }
       }
     }
+    // Défense : si une voiture plus rapide arrive juste derrière, on protège l'intérieur (une seule fois)
+    if (!car.isPlayer && cars.length > 1) {
+      if (car.defendT > 0) { car.defendT -= dt; target = car.defendLane; }
+      else if (Math.random() < dt * 0.6) {
+        for (const o of cars) {
+          if (o === car || o.pit) continue;
+          const dx = o.x - car.x, dy = o.y - car.y;
+          const back = -(dx * fx + dy * fy);
+          if (back > 40 && back < 220 && o.speed > speed + 15 && Math.abs(-dx * fy + dy * fx) < 60) {
+            const kIn = track.k[(car.idx + Math.round(300 / sp)) % N];
+            car.defendLane = clamp(Math.sign(kIn || 1) * track.half * 0.45, -track.half + 16, track.half - 16);
+            car.defendT = 2.5;
+            break;
+          }
+        }
+      }
+    }
+    // Erreur de pilotage : freinage trop tardif, la voiture élargit sa trajectoire
+    if (!car.isPlayer && car.mistake > 0) { car.mistake -= dt; target += Math.sign(target || 1) * track.half * 0.5; }
+    else if (!car.isPlayer && speed > 300 && Math.random() < dt * 0.05 * Math.max(0.01, 1.04 - car.skill) * (2 - (car.wx || 1))) car.mistake = 1.3;
     target = clamp(target, -track.half + 16, track.half - 16);
     car.lane += (target - car.lane) * Math.min(1, dt * 1.6);
 
@@ -837,7 +862,7 @@
     const err = wrapAngle(Math.atan2(ty - car.y, tx - car.x) - car.a);
     const steer = clamp(err * 3.2, -1, 1);
 
-    const vt = track.vp[(car.idx + Math.round((20 + speed * 0.1) / sp)) % N] * car.skill * (car.wx || 1) * (0.55 + 0.45 * (car.tyreF || 1));
+    const vt = track.vp[(car.idx + Math.round((20 + speed * 0.1) / sp)) % N] * car.skill * (car.wx || 1) * (0.55 + 0.45 * (car.tyreF || 1)) * (car.mistake > 0 ? 1.07 : 1);
     let throttle = 0, brake = 0;
     if (speed < vt - 5 && !lift) throttle = 1;
     else if (speed > vt + 25) brake = clamp((speed - vt) / 160, 0.2, 1);
@@ -883,10 +908,20 @@
   class Race {
     constructor({ track, entries, laps, mode, weather, aeroMode, assists, tyreWear, playerTyre, damage }) {
       this.track = track;
+      // Météo changeante : la pluie arrive en cours de course puis la piste sèche
+      this.wetPlan = null;
+      if (weather === 'changing' && mode !== 'quali') {
+        const r0 = Math.random(), st = 0.2 + r0 * 0.3;
+        this.wetPlan = { start: st, end: st + 0.25 + Math.random() * 0.35, peak: 0.75 + Math.random() * 0.25 };
+        weather = 'cloudy';
+      } else if (weather === 'changing') weather = 'cloudy';
       this.weather = F1.WEATHER[weather] ? weather : 'dry';
+      this.baseWeather = this.weather;
+      this.wet = this.weather === 'rain' ? 1 : 0;
       this.cond = Object.assign({}, F1.WEATHER[this.weather], { aero: aeroMode || 'auto' });
       this.aeroMode = aeroMode || 'auto';
       this.assists = assists || {};
+      this.pitManual = !this.assists.autoPit;
       this.mode = mode || 'race';
       this.laps = this.mode === 'quali' ? 1 : laps;
       this.time = 0;
@@ -928,6 +963,11 @@
         }
         this.cars.push(car);
       });
+      // Pneus à température : fenêtre idéale en qualifs (tour de chauffe), un peu froids au départ d'une course
+      for (const c of this.cars) {
+        const w = F1.TYRE_TEMP[c.tyre] || F1.TYRE_TEMP.M;
+        c.temp = this.mode === 'quali' ? (w[0] + w[1]) / 2 : w[0] - 18;
+      }
       this.player = this.cars.find((c) => c.isPlayer) || null;
       if (this.mode === 'quali') this.started = true;
     }
@@ -935,6 +975,8 @@
     step(dt, playerInput) {
       const tr = this.track;
       if (this.started) this.time += dt;
+      if (this.started) { this.updateWeather(dt); this.updateTow(); }
+      this.playerInput = playerInput;
       for (const car of this.cars) {
         let inp;
         if (!this.started) {
@@ -944,10 +986,11 @@
           continue;
         }
         if (car.out) { car.vx = car.vy = 0; continue; }
-        this.tyres(car);
+        this.tyres(car, dt);
         if (car.pit) { this.pitStep(car, dt); continue; }
         this.maybeEnterPit(car);
         if (car.pit) { this.pitStep(car, dt); continue; }
+        if (car.isPlayer && this.mode === 'race' && !car.finished) this.trackLimits(car, dt);
         if (car.isPlayer && !car.finished && playerInput) inp = this.playerAssist(car, playerInput, dt);
         else inp = F1.aiInput(car, tr, this.cars, dt);
         car.update(dt, inp, tr, this.cond);
@@ -962,10 +1005,78 @@
       if (this.hits.length) {
         for (const car of this.cars) if (!car.out) car.trackUpdate(tr);
         for (const h of this.hits) if (h.force > 45) this.sparks.push({ x: h.x, y: h.y, power: h.force });
+        for (const h of this.hits) this.blame(h);
       }
       for (const ev of this.events) if (ev.type === 'spark') this.sparks.push(ev);
       if (this.sparks.length > 60) this.sparks.splice(0, this.sparks.length - 60);
       if (this.started) this.updateLaps();
+    }
+
+    // ---------- Météo évolutive ----------
+    updateWeather(dt) {
+      const W = this.wetPlan;
+      if (W) {
+        if (!this.estTotal) this.estTotal = this.laps * F1.refLapTime(this.track) * 1.08;
+        const frac = this.time / this.estTotal;
+        const target = frac >= W.start && frac < W.end ? W.peak : 0;
+        const before = this.wet;
+        this.wet += Math.max(-dt / 70, Math.min(dt / 45, target - this.wet));
+        if (before === 0 && this.wet > 0) this.events.push({ type: 'weather', msg: 'rainStart' });
+        if (before > 0.05 && this.wet <= 0.05 && target === 0) this.events.push({ type: 'weather', msg: 'dry' });
+      }
+      const w = this.wet, D = F1.WEATHER.dry, R = F1.WEATHER.rain;
+      for (const k of ['grip', 'brake', 'accel', 'steer', 'ai']) this.cond[k] = D[k] + (R[k] - D[k]) * w;
+      const wx = w > 0.45 ? 'rain' : W ? 'cloudy' : this.baseWeather;
+      if (wx !== this.weather) { this.weather = wx; this.events.push({ type: 'weather', msg: wx }); }
+    }
+
+    // ---------- Aspiration ----------
+    updateTow() {
+      const cars = this.cars;
+      for (const c of cars) {
+        c.tow = 0;
+        if (c.pit || c.out || c.speed < 200) continue;
+        const fx = Math.cos(c.a), fy = Math.sin(c.a);
+        for (const o of cars) {
+          if (o === c || o.pit || o.out) continue;
+          const dx = o.x - c.x, dy = o.y - c.y;
+          if (dx > 450 || dx < -450 || dy > 450 || dy < -450) continue;
+          const fwd = dx * fx + dy * fy;
+          if (fwd < 30 || fwd > 450) continue;
+          if (Math.abs(-dx * fy + dy * fx) > 22) continue;
+          c.tow = Math.max(c.tow, 1 - fwd / 450);
+        }
+      }
+    }
+
+    // ---------- Pénalités (joueur) ----------
+    addPenalty(car, sec, reason) {
+      car.penalty += sec;
+      this.events.push({ type: 'penalty', car, sec, reason, total: car.penalty });
+    }
+
+    trackLimits(car, dt) {
+      if (car.limCool > 0) car.limCool -= dt;
+      const off = Math.abs(car.lat) > this.track.half + 12 && car.speed > 150 && !this.sc && this.vscT <= 0;
+      car.limT = off ? car.limT + dt : 0;
+      if (car.limT > 0.25 && car.limCool <= 0) {
+        car.limCool = 4;
+        car.warnings++;
+        if (car.warnings >= 4 && car.warnings % 2 === 0) this.addPenalty(car, 5, 'Limites de la piste');
+        else this.events.push({ type: 'warning', car, count: car.warnings });
+      }
+    }
+
+    blame(h) {
+      if (this.mode !== 'race' || !this.started) return;
+      const p = h.a.isPlayer ? h.a : h.b.isPlayer ? h.b : null;
+      if (!p || h.force < 110 || (p.blameCool && this.time < p.blameCool)) return;
+      const o = p === h.a ? h.b : h.a;
+      const dx = o.x - p.x, dy = o.y - p.y, d = Math.hypot(dx, dy) || 1;
+      const hp = (Math.cos(p.a) * dx + Math.sin(p.a) * dy) / d;
+      const ho = (Math.cos(o.a) * dx + Math.sin(o.a) * dy) / d;
+      // Le joueur arrive par l'arrière dans une voiture devant lui
+      if (hp > 0.6 && ho > 0.3) { p.blameCool = this.time + 15; this.addPenalty(p, 5, 'Collision provoquée'); }
     }
 
     // ---------- Direction de course ----------
@@ -1053,20 +1164,30 @@
     }
     wearPerLap(compound) { return this.wearMul / (this.lifeOf(compound) * Math.max(1, this.laps)); }
 
-    tyres(car) {
+    tyres(car, dt) {
+      dt = dt || 0;
       const N = this.track.n;
       const prog = car.wrap * N + car.idx;
+      const win = F1.TYRE_TEMP[car.tyre] || F1.TYRE_TEMP.M;
+      // Température : chauffe avec la vitesse, le freinage et la glisse ; refroidit sous la pluie et derrière la voiture de sécurité
+      const wet = this.wet || 0, slick = car.tyre !== 'I';
+      const heat = (slick ? 88 : 70) * Math.pow(Math.min(1, car.speed / F1.PHYS.maxSpeed), 0.7) + Math.min(30, car.skid * 0.1) + (car.brakeIn || 0) * 20;
+      const amb = 28 - 25 * wet - (slick ? 20 * wet : 0);
+      const tgt = car.pit ? Math.max(car.temp, 70) : amb + heat;
+      car.temp += (tgt - car.temp) * Math.min(1, dt * 0.18);
+      const over = Math.max(0, (car.temp - win[1]) / 20);
       if (car.prevProg != null) {
         const d = prog - car.prevProg;
-        if (d > 0 && d < 60) car.wear += (d / N) * this.wearPerLap(car.tyre);
+        if (d > 0 && d < 60) car.wear += (d / N) * this.wearPerLap(car.tyre) * (1 + Math.min(1.5, over) * 0.8);
       }
       car.prevProg = prog;
       const T = F1.TYRES[car.tyre];
       let g = T.grip;
-      if (this.weather === 'rain' && car.tyre !== 'I') g *= 0.8;   // pneus slicks sous la pluie
-      if (this.weather !== 'rain' && car.tyre === 'I') g *= 0.94;
+      if (slick) g *= 1 - 0.25 * wet;              // pneus slicks sur piste mouillée
+      else g *= 0.94 + 0.06 * Math.min(1, wet * 2); // intermédiaires sur le sec
       const w = car.wear;
-      car.tyreF = Math.max(0.55, g * (1 - 0.16 * Math.pow(Math.min(w, 1), 1.6) - Math.max(0, w - 1) * 0.5));
+      const tempF = 1 - 0.14 * Math.min(1, Math.max(0, (win[0] - car.temp) / 40)) - 0.1 * Math.min(1, over);
+      car.tyreF = Math.max(0.5, g * tempF * (1 - 0.16 * Math.pow(Math.min(w, 1), 1.6) - Math.max(0, w - 1) * 0.5));
       if (!car.isPlayer && !car.pitReq && !car.pit && !car.finished && this.mode === 'race') this.aiStrategy(car);
     }
 
@@ -1133,6 +1254,7 @@
         if (pit.stopT <= 0) {
           car.tyre = car.nextTyre || 'M';
           car.wear = 0;
+          car.temp = car.tyre === 'I' ? 55 : 72; // couvertures chauffantes
           car.nextTyre = null;
           car.stops++;
           car.battery = Math.max(car.battery, 0.5);
@@ -1163,9 +1285,48 @@
           for (let j = 0; j <= 60; j += 5) lim = Math.min(lim, tr.vp[(((ahead + j) % N) + N) % N]);
           target = lim;
         }
+        const inp = car.isPlayer && this.pitManual ? this.playerInput : null;
+        if (inp) {
+          // Conduite manuelle : le joueur gère sa vitesse. Limiteur automatique dans la voie,
+          // mais il faut arriver sous 80 km/h à la ligne et s'arrêter soi-même devant son garage.
+          const inLane = pit.d >= P.a - 30 && pit.d <= P.z;
+          let cap = inLane ? VL : target;
+          if (pit.phase === 'out' && pit.d > P.z + 30) cap = target;
+          if (pit.phase === 'in' && pit.d < P.a - 30) {
+            const N2 = tr.n, ahead = Math.floor(pit.d);
+            cap = 900;
+            for (let j = 0; j <= 40; j += 5) cap = Math.min(cap, tr.vp[(((ahead + j) % N2) + N2) % N2]);
+          }
+          pit.v += (inp.throttle || 0) * 420 * dt - (inp.brake || 0) * 1300 * dt - 30 * dt;
+          pit.v = Math.max(0, Math.min(pit.v, Math.max(cap, inLane ? 0 : cap)));
+          const was = pit.d;
+          pit.d += (pit.v * dt) / tr.spacing;
+          if (pit.phase === 'in' && was < P.a - 30 && pit.d >= P.a - 30 && pit.v > VL * 1.06 && !pit.speeding) {
+            pit.speeding = true;
+            this.addPenalty(car, 5, 'Excès de vitesse dans les stands');
+          }
+          if (inLane && pit.v > VL) pit.v = VL;
+          if (pit.phase === 'in') {
+            const off = (pit.d - pit.stopD) * tr.spacing;
+            const atBox = Math.abs(off) < 40 && pit.v < 40;
+            const over = off > 60;
+            if (atBox || over) {
+              pit.overshoot = over;
+              pit.d = pit.stopD;
+              pit.v = 0;
+              pit.phase = 'stop';
+              pit.stationary = 2.1 + this.rand() * 0.6 + (over ? 3 : 0);
+              pit.repair = (car.dmg.fw > 0.1 ? 8 : 0) + (car.dmg.rw > 0.25 ? 15 : 0);
+              pit.stationary += pit.repair;
+              pit.stopT = pit.stationary;
+              if (over) this.events.push({ type: 'pitOvershoot', car });
+            }
+          }
+        } else {
         pit.v = pit.v > target ? Math.max(target, pit.v - 1300 * dt) : Math.min(target, pit.v + 500 * dt);
         pit.d += (pit.v * dt) / tr.spacing;
-        if (pit.phase === 'in' && pit.d >= pit.stopD - 0.05) {
+        }
+        if (!inp && pit.phase === 'in' && pit.d >= pit.stopD - 0.05) {
           pit.d = pit.stopD;
           pit.phase = 'stop';
           pit.stationary = 2.1 + this.rand() * 0.6 + (this.rand() < 0.05 ? 2.5 : 0);
@@ -1237,9 +1398,11 @@
             }
             if (car.wrap >= this.laps) {
               car.finished = true;
-              car.finishTime = this.time;
+              car.finishTime = this.time + (car.penalty || 0);
               this.finishOrder.push(car);
-              car.finishPos = this.finishOrder.length;
+              // Les pénalités en temps s'ajoutent au temps final et peuvent faire perdre des places
+              this.finishOrder.sort((a, b) => a.finishTime - b.finishTime);
+              this.finishOrder.forEach((c, k) => { c.finishPos = k + 1; });
               this.events.push({ type: 'finish', car, pos: car.finishPos, time: lt });
             } else {
               this.events.push({ type: 'lap', car, lap: car.wrap + 1, time: lt });

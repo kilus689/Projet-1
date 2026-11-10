@@ -109,7 +109,7 @@
       if (this.world) this.dispose();
       this.world = X.buildWorld(track, scene2d, this.quality, weather);
       this.rain = null;
-      if (weather === 'rain') {
+      this.makeRain = () => {
         // Gouttes : segments qui tombent dans une boîte autour de la caméra
         const n = this.quality === 'low' ? 900 : 2200;
         const pos = new Float32Array(n * 6);
@@ -122,7 +122,8 @@
         this.rain = new T.LineSegments(g, new T.LineBasicMaterial({ color: 0xc8d2dc, transparent: true, opacity: 0.45, fog: false }));
         this.rain.frustumCulled = false;
         this.world.scene.add(this.rain);
-      }
+      };
+      if (weather === 'rain') this.makeRain();
       this.scene = this.world.scene;
       this.envRT = this.pmrem.fromEquirectangular(this.world.sky);
       this.scene.environment = this.envRT.texture;
@@ -235,7 +236,10 @@
         const rpm = (sp * 8) % 1;
         this.wheel.userData.leds.forEach((l, k) => l.m.color.copy(k / 8 < rpm ? l.c : new T.Color(0x1a1a1a)));
       }
-      if (this.rain) {
+      // Météo changeante : la pluie apparaît ou disparaît pendant la course
+      if (race.wet > 0.3 && !this.rain && this.makeRain) this.makeRain();
+      if (this.rain) this.rain.visible = race.wet == null || race.wet > 0.3;
+      if (this.rain && this.rain.visible) {
         const a = this.rain.geometry.getAttribute('position');
         const arr = a.array, fall = 950 * dt;
         for (let i = 0; i < arr.length; i += 6) {

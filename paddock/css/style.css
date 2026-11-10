@@ -510,3 +510,10 @@ kbd {
 /* Drapeaux de la direction de course */
 .tv-flag { margin-left: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 800; font-size: 14px; letter-spacing: 0.5px; }
 .tv-flag.yellow { background: #ffd60a; color: #111; animation: dmgblink 0.7s infinite alternate; }
+
+/* Température des pneus et pénalités */
+.tp-temp { font-size: 13px; font-weight: 800; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); }
+.tp-temp.cold { color: #6ec3ff; }
+.tp-temp.ok { color: #3ddc84; }
+.tp-temp.hot { color: #ff6a4d; }
+.tp-pen { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); background: #e10600; color: #fff; font-weight: 800; padding: 3px 10px; border-radius: 6px; font-size: 14px; z-index: 5; }
