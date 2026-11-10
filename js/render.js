@@ -571,6 +571,12 @@
         if (car.x < V.l - 40 || car.x > V.r + 40 || car.y < V.t - 40 || car.y > V.b + 40) continue;
         drawCar(ctx, car, t);
       }
+      // Fantôme du contre-la-montre (voiture translucide)
+      if (race.ghost) {
+        ctx.save(); ctx.globalAlpha = 0.38;
+        drawCar(ctx, { x: race.ghost.x, y: race.ghost.y, a: race.ghost.a, steer: 0, team: race.ghost.team, speed: 0, brakeIn: 0, isPlayer: false }, t);
+        ctx.restore();
+      }
       // Voiture de sécurité (gyrophares orange)
       if (race.sc && race.sc.x) {
         const S = race.sc;

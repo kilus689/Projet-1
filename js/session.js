@@ -256,6 +256,14 @@
     const set = F1.Settings.get();
     S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists, tyreWear: set.tyreWear, damage: set.damage, setup: set.setup, practice: o.practice, playerTyre: o.playerTyre });
     S.aeroWanted = false; S.prevAero = false; steerIn = 0;
+    S.replay = F1.Replay ? new F1.Replay(S.race.cars, track, 30) : null;
+    S.maxDmg = 0; S.lastPos = 0; S.radioFlags = {};
+    // Contre-la-montre : fantôme du meilleur tour enregistré sur ce circuit
+    S.ghost = o.timeTrial && F1.Ghost ? F1.Ghost.get(o.gp.id) : null;
+    S.rec = []; S.recT = 0;
+    S.race.ghost = null;
+    S.challenge = null;
+    if (F1.Radio) F1.Radio.stop();
     bannerQ.length = 0; bannerT = 0; battleCd = 8;
     $('tv-banner').className = 'tv-banner';
     const isRace = o.mode === 'race';
@@ -270,6 +278,10 @@
     if (isRace && S.race.player) {
       const p = S.race.player;
       tv(`Sur la grille · P${p.grid}`, p.name, `${p.team.name} · n° ${p.num} · pneus ${F1.TYRES[p.tyre].label.toLowerCase()}`, 'green');
+      if (F1.Challenges) {
+        S.challenge = F1.Challenges.pick(o.gp.id, p.grid);
+        tv('Défi du week-end', S.challenge.text, 'Réussissez-le pour le débloquer dans vos records', 'purple');
+      }
     }
     $('touch-aero').classList.toggle('hidden', set.aero !== 'manual');
     S.scene2d = F1.buildScene(track);
@@ -301,6 +313,7 @@
 
   function stopToMenu() {
     S.state = 'idle';
+    if (F1.Radio) F1.Radio.stop();
     if (r3d) r3d.show(false);
     $('game').classList.remove('hidden');
     audio.stopEngine();
@@ -329,11 +342,25 @@
       me.dnf = true;
       order = order.filter((o) => o !== me).concat([me]);
     }
-    return {
+    const out = {
       order,
       fastest: race.bestLap.car ? race.bestLap.car.id : null,
       fastestTime: race.bestLap.time,
     };
+    // Records et défi du week-end
+    const p = race.player;
+    if (p && F1.Records) {
+      const k = order.findIndex((o) => o.id === p.id);
+      const me = order[k];
+      F1.Records.race(S.opts.gp.id, k + 1, me.dnf);
+      if (p.bestLap < Infinity) F1.Records.lap(S.opts.gp.id, p.bestLap, 'raceLap');
+      if (S.challenge) {
+        const ok = F1.Challenges.check(S.challenge, { pos: k + 1, grid: p.grid, dnf: me.dnf, fastest: race.bestLap.car === p, penalty: p.penalty, maxDmg: S.maxDmg || 0, stops: p.stops });
+        if (ok) F1.Challenges.mark(S.opts.gp.id, S.challenge);
+        out.challenge = { text: S.challenge.text, ok };
+      }
+    }
+    return out;
   }
 
   function finish(result) {
@@ -344,6 +371,7 @@
 
   // ---------- Pause ----------
   function togglePause() {
+    if (S.state === 'replay') { endReplay(); return; }
     if (S.state === 'run' || S.state === 'countdown') {
       S.prevState = S.state;
       S.state = 'paused';
@@ -356,11 +384,59 @@
     }
   }
 
+  // ---------- Radio de l'ingénieur ----------
+  function radio(text, prio) { if (F1.Radio && !S.demo) F1.Radio.say(text, prio); }
+  const sec = (x) => x.toFixed(1).replace('.', ',');
+  function radioLap(race, p) {
+    const st = race.standings(), i = st.indexOf(p);
+    const ahead = st[i - 1], behind = st[i + 1];
+    const parts = [`P${i + 1}.`];
+    if (ahead && !ahead.finished) parts.push(`${ahead.name.split(' ').pop()} devant à ${sec(Math.max(0, interval(st, i) || 0))} seconde.`);
+    if (behind && !behind.finished && !behind.out) parts.push(`${behind.name.split(' ').pop()} derrière à ${sec(Math.max(0, interval(st, i + 1) || 0))}.`);
+    radio(parts.join(' '));
+  }
+  function radioChecks(race, p) {
+    const F = S.radioFlags;
+    if (!F.wear && p.wear > 0.7 && race.wearMul) { F.wear = 1; radio('Les pneus sont usés. On peut rentrer au stand quand tu veux, appuie sur STAND.'); }
+    if (p.wear < 0.3) F.wear = 0;
+    const win = F1.TYRE_TEMP[p.tyre] || F1.TYRE_TEMP.M;
+    if (p.temp < win[0] - 15 && p.speed > 150 && (!F.cold || race.time - F.cold > 40)) { F.cold = race.time; radio('Pneus froids, attention au freinage.'); }
+    if (p.temp > win[1] + 10 && (!F.hot || race.time - F.hot > 40)) { F.hot = race.time; radio('Les pneus surchauffent, ménage-les dans les virages.'); }
+    const pos = race.standings().indexOf(p) + 1;
+    if (S.lastPos && pos !== S.lastPos && race.time > 8 && (!F.pos || race.time - F.pos > 6)) {
+      F.pos = race.time;
+      radio(pos < S.lastPos ? `Bien joué ! P${pos}.` : `On perd une place, P${pos}. On reste concentré.`);
+    }
+    S.lastPos = pos;
+  }
+
+  // ---------- Ralenti des 30 dernières secondes ----------
+  function startReplay(back) {
+    if (!S.replay || S.replay.frames.length < 10) return;
+    S.replayBack = back;
+    S.replaySnap = S.replay.snapshot();
+    S.replayN = 0;
+    S.prevStateReplay = S.state;
+    S.state = 'replay';
+    audio.stopEngine();
+    $('dialog').classList.add('hidden');
+    banner('▶ Ralenti · touchez ⏸ pour quitter', 'replay');
+  }
+  function endReplay() {
+    if (S.state !== 'replay') return;
+    S.replay.restore(S.replaySnap);
+    S.state = S.prevStateReplay;
+    hideBanner();
+    last = performance.now();
+    if (S.replayBack) S.replayBack();
+  }
+
   function showPause() {
     const o = S.opts;
     const btns = [['Reprendre', 'primary', togglePause]];
     btns.push([`Caméra : ${CAMERAS[camIdx].label}`, '', () => { nextCamera(); showPause(); }]);
     if (r3d && r3d.ok) btns.push([`Graphismes 3D : ${r3d.qualityLabel}`, '', () => { r3d.cycleQuality(); showPause(); }]);
+    if (S.replay && S.replay.frames.length > 30) btns.push(['▶ Ralenti (30 dernières secondes)', '', () => startReplay(showPause)]);
     if (o.mode === 'race') {
       btns.push(['Simuler la fin de course', '', () => finish(raceResult(false))]);
       if (o.allowRestart) btns.push(['Recommencer', '', () => newRun()]);
@@ -543,13 +619,18 @@
         audio.beep(880, 0.45, 0.2);
         race.started = true;
         S.state = 'run';
+        radio('Feux éteints ! Attention aux pneus froids dans le premier tour.', true);
         banner('Go !', 'go');
         setTimeout(() => { if ($('banner').classList.contains('go')) hideBanner(); }, 1000);
         setTimeout(() => $('lights').classList.add('hidden'), 1000);
       }
     }
 
-    if (dt > 0 && race) {
+    if (S.state === 'replay' && race) {
+      S.replayN += dt * 30 * 0.5; // demi-vitesse
+      if (!S.replay.apply(S.replayN)) endReplay();
+      dt = S.state === 'replay' ? dt : 0;
+    } else if (dt > 0 && race) {
       acc += dt;
       const input = S.state === 'run' ? readInput(dt) : null;
       let steps = 0;
@@ -565,6 +646,19 @@
       }
       if (steps >= 8) acc = 0;
       renderer.effects(race.cars, dt);
+      if (S.replay && race.started && !S.demo) S.replay.record(dt);
+      if (!S.demo && race.player) {
+        const p = race.player;
+        S.maxDmg = Math.max(S.maxDmg || 0, p.damaged || 0);
+        // Contre-la-montre : enregistre le tour en cours et place le fantôme
+        if (S.opts && S.opts.timeTrial && p.wrap === 0 && !p.finished) {
+          const lt = race.time - p.lapStart;
+          while (S.rec.length <= lt / 0.05) S.rec.push([Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.round(p.a * 1000) / 1000]);
+          const g = S.ghost ? F1.Ghost.at({ dt: 0.05, s: S.ghost.s }, lt) : null;
+          race.ghost = g ? Object.assign(g, { team: p.team, num: p.num }) : null;
+        } else if (S.opts && S.opts.timeTrial) race.ghost = null;
+        if (race.mode === 'race' && S.state === 'run' && !p.finished && !p.out) radioChecks(race, p);
+      }
     }
 
     if (race && S.demo) race.events.length = 0;
@@ -583,15 +677,20 @@
           if (race.time > 5) tv('Meilleur tour en course', `${ev.car.name}`, `${ev.car.team.name} · ${fmt(ev.time)}`, 'purple');
         } else if (ev.type === 'lap') {
           if (ev.car === p) toast(ev.lap === race.laps ? 'Dernier tour !' : `Tour ${ev.lap} · ${fmt(ev.time)}`);
+          if (ev.car === p) { if (ev.lap === race.laps) radio('Dernier tour, on donne tout !', true); else radioLap(race, p); }
           if (ev.lap === race.laps && race.standings()[0] === ev.car) tv('Course', 'Dernier tour', `${ev.car.name} mène la course`);
         } else if (ev.type === 'weather') {
           $('tv-wx').textContent = { dry: '☀️', cloudy: '☁️', rain: '🌧️' }[race.weather] || '🌦️';
+          if (ev.msg === 'rainStart') radio('La pluie arrive. À toi de voir pour les intermédiaires.', true);
+          if (ev.msg === 'dry') radio('La piste sèche, on peut repasser aux slicks.', true);
           if (ev.msg === 'rainStart') { tv('Météo', 'La pluie arrive', 'Pensez aux pneus intermédiaires', 'yellow'); toast('🌧️ La pluie commence à tomber', 'red'); }
           else if (ev.msg === 'rain') toast('🌧️ Piste mouillée : intermédiaires conseillés', 'red');
           else if (ev.msg === 'dry') { tv('Météo', 'La piste sèche', 'Retour aux pneus slicks', 'green'); toast('☀️ La piste sèche : slicks conseillés'); }
         } else if (ev.type === 'warning') {
+          if (ev.car === p && ev.count === 3) radio('Dernier avertissement pour les limites de piste !', true);
           if (ev.car === p) toast(ev.count >= 3 ? `Limites de la piste : avertissement ${ev.count} (dernier avant pénalité)` : `Limites de la piste : avertissement ${ev.count}`, 'red');
         } else if (ev.type === 'penalty') {
+          if (ev.car === p) radio(`On a pris ${ev.sec} secondes de pénalité : ${ev.reason.toLowerCase()}.`, true);
           if (ev.car === p) { toast(`Pénalité +${ev.sec} s : ${ev.reason}`, 'red'); tv('Commissaires', `Pénalité de ${ev.sec} secondes`, `${p.name} · ${ev.reason}`, 'red'); audio.beep(220, 0.3, 0.15); }
         } else if (ev.type === 'pitOvershoot') {
           if (ev.car === p) toast('Garage dépassé : les mécaniciens repoussent la voiture (+3 s)', 'red');
@@ -599,6 +698,8 @@
           const F = { yellow: ['DRAPEAU JAUNE', 'yellow'], vsc: ['VSC', 'yellow'], sc: ['SAFETY CAR', 'yellow'], green: ['', ''] }[ev.flag];
           const el = $('tv-flag');
           el.textContent = F[0]; el.className = 'tv-flag ' + F[1] + (F[0] ? '' : ' hidden');
+          if (ev.flag === 'vsc') radio('VSC, VSC. Vitesse limitée.', true);
+          if (ev.flag === 'sc') radio('Safety car, safety car. Reste derrière la file.', true);
           if (ev.flag === 'vsc') { tv('Direction de course', 'Voiture de sécurité virtuelle', 'Vitesse limitée pour toutes les voitures', 'yellow'); toast('VSC : vitesse limitée', 'red'); }
           if (ev.flag === 'sc') { tv('Direction de course', 'Voiture de sécurité', 'Dépassements interdits, suivez la file', 'yellow'); toast('SAFETY CAR : pas de dépassement', 'red'); }
           if (ev.flag === 'yellow' && race.yellow && p && Math.abs(race.track.rel(p.idx) - race.track.rel(race.yellow.idx)) < 600) toast('Drapeau jaune : ralentissez', 'red');
@@ -606,11 +707,12 @@
           tv('Direction de course', 'La voiture de sécurité rentre ce tour', 'Préparez la relance', 'yellow');
         } else if (ev.type === 'restart') {
           tv('Direction de course', 'Drapeau vert', ev.vsc ? 'Fin de la VSC' : 'Relance de la course', 'green');
-          if (p && !p.out) toast('Drapeau vert : course relancée !', 'purple');
+          if (p && !p.out) { toast('Drapeau vert : course relancée !', 'purple'); radio('Drapeau vert, go go go !', true); }
         } else if (ev.type === 'retired') {
           if (ev.car === p) { banner('Abandon', 'warn'); S.finishTimer = 3; audio.beep(140, 0.6, 0.2); }
           else tv('Abandon', ev.car.name, `${ev.car.team.name} · accident`, 'red');
         } else if (ev.type === 'damage') {
+          if (ev.car === p && ev.level >= 0.5) radio(ev.part === 'fw' ? 'Aileron avant endommagé, rentre au stand pour changer le nez.' : ev.part === 'rw' ? "L'aileron arrière est touché, on perd de la vitesse. Box si tu peux." : 'La suspension est touchée, on fait avec. Doucement sur les vibreurs.', true);
           if (ev.car === p) {
             const name = F1.DAMAGE_PARTS[ev.part], pc = Math.round(ev.level * 100);
             if (ev.level >= 0.9) toast(`${name} détruit${ev.part === 'sus' ? 'e' : ''} !${ev.part !== 'sus' ? ' Rentre au stand' : ''}`, 'red');
@@ -621,6 +723,7 @@
             tv('Incident', ev.car.name, `${F1.DAMAGE_PARTS[ev.part]} endommagé${ev.part === 'sus' ? 'e' : ''}`, '');
           }
         } else if (ev.type === 'pitIn') {
+          if (ev.car === p) radio(race.pitManual ? 'Box, box. Attention à la vitesse à la ligne.' : 'Box, box. On t\'attend.', true);
           if (ev.car === p) { toast(race.pitManual ? 'Stands : sous 80 km/h à la ligne, freine devant ton garage' : 'Entrée aux stands · limitation à 80 km/h'); updatePitPanel(); }
         } else if (ev.type === 'pit') {
           const T = F1.TYRES[ev.tyre];
@@ -630,6 +733,7 @@
         } else if (ev.type === 'finish' && race.finishOrder.length === 1 && ev.car !== p) {
           tv('Drapeau à damier', `${ev.car.name} gagne`, ev.car.team.name, 'green');
         } else if (ev.type === 'finish' && ev.car === p) {
+          radio(ev.pos === 1 ? 'Victoire ! Victoire ! Incroyable, bravo !' : ev.pos <= 3 ? `P${ev.pos}, sur le podium ! Superbe course !` : ev.pos <= 10 ? `P${ev.pos}, dans les points. Bien joué.` : `P${ev.pos}. On fera mieux la prochaine fois.`, true);
           banner(ev.pos === 1 ? 'Victoire !' : `Arrivée : P${ev.pos}`, ev.pos === 1 ? 'go' : '');
           S.finishTimer = 3;
           audio.beep(660, 0.3, 0.15);
@@ -652,11 +756,12 @@
         if (S.hudTimer <= 0) { S.hudTimer = 0.5; fillLive(); }
       }
       if (S.state !== 'paused') {
-        const gear = audio.engine(p, S.state === 'run' || S.state === 'countdown' || S.state === 'done');
+        const gear = audio.engine(p, S.state === 'run' || S.state === 'countdown' || S.state === 'done', race);
         $('hud-gear').textContent = p.speed < 5 ? 'N' : gear || 1;
       }
       if (S.state === 'run' || S.state === 'countdown') { S.hudTimer -= dt; updateHud(false); }
       if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) $('toast').classList.remove('show'); }
+      if (F1.Radio) F1.Radio.tick(dt);
     }
 
     if (race) {
@@ -680,6 +785,15 @@
   // ---------- Fin de tour de qualification ----------
   function qualiDone(time) {
     const o = S.opts;
+    if (F1.Records) {
+      const rec = F1.Records.lap(o.gp.id, time, 'lap');
+      if (rec) toast('🏆 Nouveau record personnel sur ce circuit !', 'purple');
+    }
+    if (o.timeTrial && (!S.ghost || time < S.ghost.time) && S.rec.length > 20) {
+      F1.Ghost.set(o.gp.id, { time, s: S.rec });
+      S.ghost = { time, s: S.rec };
+      toast('👻 Nouveau fantôme enregistré', 'purple');
+    }
     const body = document.createElement('div');
     body.className = 'dialog-body';
     const best = bestAttempt();
@@ -699,7 +813,7 @@
     const body = document.createElement('div');
     body.className = 'dialog-body';
     body.innerHTML = '<p class="subtitle">Les autres pilotes terminent leur course…</p><div class="table-wrap"><table class="results-table"><thead><tr><th>Pos</th><th>Pilote</th><th>Écart</th></tr></thead><tbody id="live-body"></tbody></table></div>';
-    dialog(S.opts.title || 'Arrivée', body, [['Continuer', 'primary', () => finish(raceResult(false))]]);
+    dialog(S.opts.title || 'Arrivée', body, [['▶ Revoir l\'arrivée', '', () => startReplay(raceDone)], ['Continuer', 'primary', () => finish(raceResult(false))]]);
     $('dialog').querySelector('.menu-card').classList.remove('small');
     fillLive();
   }

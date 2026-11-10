@@ -529,3 +529,18 @@ kbd {
 .mk-meta { color: var(--muted); font-size: 13px; flex: 1; }
 .mk-cost { font-weight: 800; }
 .setup .row section { min-width: 200px; }
+
+/* Radio de l'ingénieur et ralenti */
+.radio { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); max-width: min(560px, 90vw); background: rgba(10, 14, 22, 0.88); border-left: 4px solid #3ddc84; border-radius: 8px; padding: 8px 14px; display: flex; flex-direction: column; gap: 2px; z-index: 6; pointer-events: none; }
+.radio-k { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #3ddc84; text-transform: uppercase; }
+#radio-txt { font-size: 16px; font-weight: 600; }
+#banner.replay { background: rgba(225, 6, 0, 0.85); font-size: 18px; }
+.touch-mode .radio { bottom: auto; top: 110px; }
+/* Records */
+.records-table td.rec { font-variant-numeric: tabular-nums; }
+.totals { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 14px; }
+.totals div { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 14px; text-align: center; }
+.totals b { display: block; font-size: 24px; }
+.challenge-line { font-weight: 700; }
+.challenge-line.ok { color: #3ddc84; }
+.challenge-line.ko { color: #ff8a7a; }
