@@ -254,7 +254,7 @@
     const o = S.opts;
     const track = F1.getTrack(o.gp);
     const set = F1.Settings.get();
-    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists, tyreWear: set.tyreWear, damage: set.damage, playerTyre: o.playerTyre });
+    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists, tyreWear: set.tyreWear, damage: set.damage, setup: set.setup, practice: o.practice, playerTyre: o.playerTyre });
     S.aeroWanted = false; S.prevAero = false; steerIn = 0;
     bannerQ.length = 0; bannerT = 0; battleCd = 8;
     $('tv-banner').className = 'tv-banner';
@@ -293,7 +293,7 @@
     } else {
       S.state = 'run';
       $('lights').classList.add('hidden');
-      banner('Tour de qualification', 'go');
+      banner(S.opts.qLabel || 'Tour de qualification', 'go');
       setTimeout(() => { if ($('banner').classList.contains('go')) hideBanner(); }, 1600);
     }
     updateHud(true);

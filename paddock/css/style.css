@@ -517,3 +517,15 @@ kbd {
 .tp-temp.ok { color: #3ddc84; }
 .tp-temp.hot { color: #ff6a4d; }
 .tp-pen { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); background: #e10600; color: #fff; font-weight: 800; padding: 3px 10px; border-radius: 6px; font-size: 14px; z-index: 5; }
+
+/* Qualifs, R&D, marché des pilotes */
+.results-table tr.eliminated td { opacity: 0.5; }
+.results-table tr.eliminated td:first-child { color: #ff6a4d; }
+.rnd-btns { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.rnd-list { margin-top: 8px; font-size: 14px; color: var(--muted); }
+.market { display: flex; flex-direction: column; gap: 6px; }
+.market-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(255,255,255,0.04); border-left: 5px solid var(--team); }
+.mk-name { font-weight: 700; min-width: 180px; }
+.mk-meta { color: var(--muted); font-size: 13px; flex: 1; }
+.mk-cost { font-weight: 800; }
+.setup .row section { min-width: 200px; }
