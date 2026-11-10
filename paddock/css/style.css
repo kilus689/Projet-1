@@ -506,3 +506,7 @@ kbd {
 .tp-dmg i.warn { background: #c98a00; color: #fff; }
 .tp-dmg i.bad { background: #e10600; color: #fff; animation: dmgblink 0.8s infinite alternate; }
 @keyframes dmgblink { to { opacity: 0.55; } }
+
+/* Drapeaux de la direction de course */
+.tv-flag { margin-left: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 800; font-size: 14px; letter-spacing: 0.5px; }
+.tv-flag.yellow { background: #ffd60a; color: #111; animation: dmgblink 0.7s infinite alternate; }

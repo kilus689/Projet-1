@@ -220,19 +220,21 @@
     // Dérive (aileron de requin)
     accent.push(at(plate([[0, 0], [-9, 0], [-9, 1.9], [-3, 0.6]], 0.25), -12.5, 7.6, 0));
 
-    // Aileron avant (plan principal + 2 volets) et flasques
-    carbon.push(at(airfoil(2.9, 0.12, 18.0, 0.04), 28.4, 1.1, 0));
-    accent.push(at(airfoil(1.6, 0.12, 17.4, 0.32), 25.9, 1.7, 0));
-    accent.push(at(airfoil(1.2, 0.12, 16.6, 0.58), 24.6, 2.5, 0));
+    // Aileron avant (plan principal + 2 volets) et flasques : pièces séparées (elles peuvent plier ou tomber)
+    const fwC = [], fwA = [], rwC = [], rwP = [], flap = [];
+    fwC.push(at(airfoil(2.9, 0.12, 18.0, 0.04), 28.4, 1.1, 0));
+    fwA.push(at(airfoil(1.6, 0.12, 17.4, 0.32), 25.9, 1.7, 0));
+    fwA.push(at(airfoil(1.2, 0.12, 16.6, 0.58), 24.6, 2.5, 0));
     for (const sd of [1, -1]) {
-      carbon.push(at(plate([[2.6, 0.5], [-3.4, 0.5], [-3.8, 2.1], [-1.2, 2.3], [0.9, 1.5]], 0.2), 26.1, 0.35, sd * 9.0));
+      fwC.push(at(plate([[2.6, 0.5], [-3.4, 0.5], [-3.8, 2.1], [-1.2, 2.3], [0.9, 1.5]], 0.2), 26.1, 0.35, sd * 9.0));
       carbon.push(at(plate([[0, 0], [-2.4, 0], [-2.0, 1.2], [0.2, 1.0]], 0.25), 26.0, 1.3, sd * 1.25)); // supports
     }
-    // Aileron arrière (plan + volet), flasques, poutre, pylône
-    carbon.push(at(airfoil(3.2, 0.11, 10.2, 0.12), -21.9, 8.1, 0));
-    accent.push(at(airfoil(1.9, 0.11, 10.2, 0.55), -21.6, 9.25, 0));
-    for (const sd of [1, -1]) paint.push(solid(at(plate([[1.2, 3.2], [-4.6, 3.2], [-4.6, 9.9], [-0.3, 10.1]], 0.25), -21.2, 0, sd * 5.15)));
+    // Aileron arrière (plan + volet mobile de l'aéro active), flasques ; pylône fixe
+    rwC.push(at(airfoil(3.2, 0.11, 10.2, 0.12), -21.9, 8.1, 0));
+    flap.push(at(airfoil(1.9, 0.11, 10.2, 0.55), -21.6, 9.25, 0));
+    for (const sd of [1, -1]) rwP.push(solid(at(plate([[1.2, 3.2], [-4.6, 3.2], [-4.6, 9.9], [-0.3, 10.1]], 0.25), -21.2, 0, sd * 5.15)));
     carbon.push(at(plate([[0, 0], [-1.6, 0], [-2.6, 4.3], [-1.2, 4.3]], 0.6), -20.6, 4.0, 0));
+    const piv = (arr, px, py) => { const g = merge(arr); g.translate(-px, -py, 0); return g; };
 
     // Suspensions (bras triangulés, biellettes)
     for (const sd of [1, -1]) {
@@ -272,6 +274,9 @@
       paint: merge(paint),
       carbon: merge(carbon),
       accent: merge(accent),
+      // pivots : aileron avant à ses supports, aileron arrière sur le pylône, volet à son bord d'attaque
+      fwC: piv(fwC, 26.0, 1.3), fwA: piv(fwA, 26.0, 1.3),
+      rwC: piv(rwC, -21.0, 8.0), rwP: piv(rwP, -21.0, 8.0), flap: piv(flap, -20.7, 9.3),
       helmet: new T.SphereGeometry(1.45, 40, 30),
       visor: at(new T.SphereGeometry(1.48, 18, 8, -0.9, 1.8, 1.05, 0.55), 0, 0, 0, 0, Math.PI, 0),
       wheelF: wheelGeo(3.525, 2.8),
@@ -343,6 +348,13 @@
     add(S.paint, M.paint, true);
     add(S.carbon, C.carbon, true);
     add(S.accent, M.accent, true);
+    const fw = new T.Group(); fw.position.set(26.0, 1.3, 0); g.add(fw);
+    fw.add(new T.Mesh(S.fwC, C.carbon), new T.Mesh(S.fwA, M.accent));
+    const rw = new T.Group(); rw.position.set(-21.0, 8.0, 0); g.add(rw);
+    rw.add(new T.Mesh(S.rwC, C.carbon), new T.Mesh(S.rwP, M.paint));
+    const flapG = new T.Group(); flapG.position.set(0.3, 1.3, 0); rw.add(flapG);
+    flapG.add(new T.Mesh(S.flap, M.accent));
+    for (const o of [fw, rw]) o.traverse((m) => { if (m.isMesh) m.castShadow = true; });
     const helmet = new T.Group();
     helmet.add(new T.Mesh(S.helmet, helmetMat(team, code, isPlayer)));
     helmet.add(new T.Mesh(S.visor, C.visor));
@@ -368,7 +380,7 @@
     mk(15, 9.5 - 1.4, S.wheelF, true); mk(15, -(9.5 - 1.4), S.wheelF, true);
     mk(-19, 9.5 - 1.875, S.wheelR, false); mk(-19, -(9.5 - 1.875), S.wheelR, false);
     const rings = wheels.map((w) => w.wh.children[2]);
-    return { g, wheels, helmet, spin: 0, rings };
+    return { g, wheels, helmet, spin: 0, rings, fw, rw, flap: flapG };
   };
   X.ringMat = function (tyre) { return commonMats().rings[{ S: 0, M: 1, H: 2, I: 3 }[tyre] || 1]; };
 

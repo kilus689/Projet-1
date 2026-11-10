@@ -237,6 +237,7 @@
   };
 
   // ---------- Voiture (vue de dessus, nez vers +x) ----------
+  const SC_TEAM = { id: 'sc', name: 'Safety Car', color: '#c9ccd1', color2: '#ff8a00' };
   function drawCar(ctx, car, t) {
     const team = car.team || { color: '#ddd', color2: '#222' };
     ctx.save();
@@ -569,6 +570,28 @@
       for (const car of race.cars) {
         if (car.x < V.l - 40 || car.x > V.r + 40 || car.y < V.t - 40 || car.y > V.b + 40) continue;
         drawCar(ctx, car, t);
+      }
+      // Voiture de sécurité (gyrophares orange)
+      if (race.sc && race.sc.x) {
+        const S = race.sc;
+        drawCar(ctx, { x: S.x, y: S.y, a: S.a, steer: 0, team: SC_TEAM, speed: S.v, brakeIn: 0, isPlayer: false }, t);
+        ctx.fillStyle = Math.floor(t * 6) % 2 ? '#ffa000' : '#ffdd55';
+        ctx.beginPath(); ctx.arc(S.x, S.y, 4, 0, Math.PI * 2); ctx.fill();
+      }
+      // Étincelles des chocs
+      if (!this.sparkVis) this.sparkVis = [];
+      while (race.sparks && race.sparks.length) {
+        const s0 = race.sparks.shift();
+        const n = Math.min(14, 4 + s0.power / 30);
+        for (let k = 0; k < n; k++) this.sparkVis.push({ x: s0.x, y: s0.y, vx: (Math.random() - 0.5) * 260, vy: (Math.random() - 0.5) * 260, life: 0.35 + Math.random() * 0.3 });
+      }
+      const dtS = this.lastT != null ? Math.max(0, Math.min(0.05, t - this.lastT)) : 0;
+      this.lastT = t;
+      this.sparkVis = this.sparkVis.filter((p) => (p.life -= dtS) > 0);
+      for (const p of this.sparkVis) {
+        p.x += p.vx * dtS; p.y += p.vy * dtS;
+        ctx.fillStyle = `rgba(255,${180 + Math.random() * 60 | 0},80,${Math.min(1, p.life * 3)})`;
+        ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
       }
 
       if (sc.stand) {

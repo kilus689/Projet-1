@@ -720,6 +720,9 @@
             if (h > 0.4) this.hurt('fw', sev * 1.1, s);
             else if (h < -0.4) this.hurt('rw', sev * 1.1, s);
             else this.hurt('sus', sev * 0.8, s);
+            if (this.dmgEvents) this.dmgEvents.push({ type: 'spark', x: this.x + p.nx * s * 9, y: this.y + p.ny * s * 9, power: imp });
+            // Très gros choc : abandon (le joueur seulement en dégâts « réalistes »)
+            if (imp > 380 && !this.out && (this.isPlayer ? this.dmgMul >= 1.8 : Math.random() < 0.6)) this.retire();
           }
           // On retire la vitesse vers le mur (petit rebond seulement si le choc est franc)
           const bounce = imp > 120 ? 1.3 : 1.0;
@@ -743,6 +746,13 @@
         const crossed = [0.15, 0.5, 0.9].filter((th) => before < th && D[part] >= th);
         if (crossed.length) this.dmgEvents.push({ type: 'damage', car: this, part, level: D[part] });
       }
+    }
+    retire() {
+      this.out = true;
+      this.dmg.sus = 1;
+      this.vx = this.vy = 0;
+      this.aeroOpen = false;
+      if (this.dmgEvents) this.dmgEvents.push({ type: 'retired', car: this });
     }
     get damaged() { const D = this.dmg; return Math.max(D.fw, D.rw, D.sus); }
   }
@@ -778,7 +788,7 @@
           const imp = -rel * 0.65;
           a.vx -= nx * imp; a.vy -= ny * imp;
           b.vx += nx * imp; b.vy += ny * imp;
-          hits.push({ a, b, force: -rel });
+          hits.push({ a, b, force: -rel, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
           // Contact entre voitures : dégâts selon la partie touchée (nez dans l'arrière, roue contre roue…)
           // Les frottements légers ne cassent rien : il faut un vrai choc (> 25 km/h de vitesse relative)
           const sev = Math.min(1, Math.max(0, -rel - 70) / 420);
@@ -890,6 +900,12 @@
       this.rand = rand;
       this.wearMul = this.mode === 'quali' || tyreWear === 'off' ? 0 : tyreWear === 'high' ? 1.7 : 1;
       this.dmgMul = damage === 'off' || !damage ? 0 : damage === 'high' ? 1.8 : 1;
+      // Direction de course : drapeaux jaunes, voiture de sécurité virtuelle (VSC) ou réelle (SC)
+      this.flag = 'green';
+      this.yellow = null;     // { idx, t } secteur sous drapeau jaune
+      this.vscT = 0;
+      this.sc = null;         // { d, v, t, ending }
+      this.sparks = [];
 
       entries.forEach((e, g) => {
         const car = new Car(Object.assign({ lanePref: (rand() - 0.5) * 24 }, e));
@@ -927,6 +943,7 @@
           car.throttle = playerInput && car.isPlayer ? playerInput.throttle : 0;
           continue;
         }
+        if (car.out) { car.vx = car.vy = 0; continue; }
         this.tyres(car);
         if (car.pit) { this.pitStep(car, dt); continue; }
         this.maybeEnterPit(car);
@@ -940,9 +957,91 @@
         }
         car.wrongWay = car.alongTrack < -60 ? car.wrongWay + dt : 0;
       }
-      this.hits = this.cars.length > 1 ? F1.collide(this.cars.filter((c) => !c.pit)) : [];
-      if (this.hits.length) for (const car of this.cars) car.trackUpdate(tr);
+      if (this.started) this.raceControl(dt);
+      this.hits = this.cars.length > 1 ? F1.collide(this.cars.filter((c) => !c.pit && !c.out)) : [];
+      if (this.hits.length) {
+        for (const car of this.cars) if (!car.out) car.trackUpdate(tr);
+        for (const h of this.hits) if (h.force > 45) this.sparks.push({ x: h.x, y: h.y, power: h.force });
+      }
+      for (const ev of this.events) if (ev.type === 'spark') this.sparks.push(ev);
+      if (this.sparks.length > 60) this.sparks.splice(0, this.sparks.length - 60);
       if (this.started) this.updateLaps();
+    }
+
+    // ---------- Direction de course ----------
+    setFlag(flag) {
+      if (this.flag === flag) return;
+      this.flag = flag;
+      this.events.push({ type: 'flag', flag });
+    }
+
+    raceControl(dt) {
+      if (this.mode !== 'race') return;
+      const tr = this.track, N = tr.n, sp = tr.spacing;
+      // Incidents de ce pas de temps
+      for (const ev of this.events) {
+        if (ev.handled) continue;
+        if (ev.type === 'damage' && ev.level >= 0.5) { ev.handled = true; this.yellow = { idx: ev.car.idx, t: 8 }; }
+        if (ev.type === 'retired') {
+          ev.handled = true;
+          this.yellow = { idx: ev.car.idx, t: 12 };
+          const lead = this.standings()[0];
+          const left = this.laps - lead.wrap;
+          if (!this.sc && this.vscT <= 0 && left > 1.3) {
+            if (this.rand() < 0.55) this.deploySC(lead);
+            else { this.vscT = 30 + this.rand() * 15; this.setFlag('vsc'); }
+          }
+        }
+      }
+      if (this.yellow) { this.yellow.t -= dt; if (this.yellow.t <= 0) this.yellow = null; }
+      if (this.vscT > 0) {
+        this.vscT -= dt;
+        if (this.vscT <= 0) { this.setFlag('green'); this.events.push({ type: 'restart', vsc: true }); }
+      }
+      if (!this.sc && this.vscT <= 0) this.setFlag(this.yellow ? 'yellow' : 'green');
+
+      const running = this.cars.filter((c) => !c.out && !c.pit && !c.finished);
+      // Voiture de sécurité : roule à allure réduite devant le leader
+      const sc = this.sc;
+      if (sc) {
+        sc.t += dt;
+        const i = ((Math.floor(sc.d) % N) + N) % N;
+        const target = Math.min(tr.vp[i] * 0.6, F1.PHYS.maxSpeed * 0.5);
+        sc.v += Math.max(-600 * dt, Math.min(300 * dt, target - sc.v));
+        sc.d += (sc.v * dt) / sp;
+        const P = tr.posAt(sc.d * sp, 0);
+        const j = ((Math.floor(sc.d + 1) % N) + N) % N;
+        sc.x = P.x; sc.y = P.y; sc.idx = i; sc.a = Math.atan2(tr.pts[j].y - tr.pts[i].y, tr.pts[j].x - tr.pts[i].x);
+        // Fin : la voiture de sécurité rentre quand le leader boucle son tour après au moins 50 s
+        if (sc.t > 50 && !sc.ending) { sc.ending = true; this.events.push({ type: 'scEnding' }); }
+      }
+      if (!sc && this.vscT <= 0) return;
+      for (const car of running) {
+        car.aeroOpen = false;
+        const v = car.speed;
+        let cap;
+        if (this.vscT > 0) cap = Math.min(tr.vp[car.idx] * 0.62, F1.PHYS.maxSpeed * 0.55);
+        else {
+          // Suit la voiture physiquement devant (ou la voiture de sécurité) sans la doubler
+          let best = 1e9, bv = 0;
+          for (const o of running) {
+            if (o === car) continue;
+            const d = ((o.idx - car.idx + N) % N) * sp;
+            if (d > 0 && d < best) { best = d; bv = o.speed; }
+          }
+          const ds = ((sc.idx - car.idx + N) % N) * sp;
+          if (ds > 0 && ds < best) { best = ds; bv = sc.v; }
+          const free = Math.min(tr.vp[car.idx] * 0.75, F1.PHYS.maxSpeed * 0.62);
+          cap = best < 900 ? Math.max(0, Math.min(free, bv + (best - 130) * 1.3)) : free;
+        }
+        if (v > cap && v > 1) { const k = Math.max(cap / v, 1 - 3 * dt); car.vx *= k; car.vy *= k; }
+      }
+    }
+
+    deploySC(lead) {
+      const tr = this.track, N = tr.n;
+      this.sc = { d: lead.wrap * N + lead.idx + 60, v: lead.speed * 0.6, t: 0, ending: false, x: 0, y: 0, a: 0, idx: lead.idx };
+      this.setFlag('sc');
     }
 
     // ---------- Pneus ----------
@@ -1122,6 +1221,7 @@
 
     updateLaps() {
       for (const car of this.cars) {
+        if (car.out) continue;
         if (car.wrap > car.maxWrap) {
           car.maxWrap = car.wrap;
           if (car.wrap === 0) {
@@ -1143,6 +1243,11 @@
               this.events.push({ type: 'finish', car, pos: car.finishPos, time: lt });
             } else {
               this.events.push({ type: 'lap', car, lap: car.wrap + 1, time: lt });
+              if (this.sc && this.sc.ending && this.standings()[0] === car) {
+                this.sc = null;
+                this.setFlag('green');
+                this.events.push({ type: 'restart', vsc: false });
+              }
             }
           }
         }
@@ -1161,11 +1266,12 @@
         if (a.finished && b.finished) return a.finishPos - b.finishPos;
         if (a.finished) return -1;
         if (b.finished) return 1;
+        if (a.out !== b.out) return a.out ? 1 : -1;
         return b.progress - a.progress;
       });
     }
 
-    get allFinished() { return this.cars.every((c) => c.finished); }
+    get allFinished() { return this.cars.every((c) => c.finished || c.out); }
   }
   F1.Race = Race;
 })(typeof window !== 'undefined' ? window : globalThis);
