@@ -11,6 +11,9 @@
     tyreWear: 'normal',   // usure des pneus : off | normal | high
     damage: 'normal',     // dégâts : off | normal | high
     radio: 'voice',       // radio de l'ingénieur : voice | text | off
+    touchSize: 'L',       // taille des boutons tactiles : S | M | L | XL
+    touchSwap: false,     // pédales à gauche, direction à droite
+    steerMode: 'buttons', // direction : buttons | tilt (inclinaison de l'iPad)
     setup: { wing: 3, gear: 3, susp: 3 }, // réglages de la voiture (1 à 5)
     startTyre: 'M',       // pneus de départ du joueur : S | M | H
     assists: { brake: false, tc: true, steer: false, line: false, autoPit: false },
@@ -49,6 +52,8 @@
     },
     WEAR: { off: 'Désactivée', normal: 'Normale', high: 'Forte' },
     DAMAGE: { off: 'Aucun', normal: 'Réduits', high: 'Réalistes' },
+    TOUCH_SIZES: { S: 'Petits', M: 'Moyens', L: 'Grands', XL: 'Très grands' },
+    STEER_MODES: { buttons: '◀ ▶ Boutons', tilt: '📱 Inclinaison' },
     RADIO: { voice: '🔊 Voix + texte', text: '💬 Texte seul', off: 'Désactivée' },
     WEATHER_CHOICES: { dry: '☀️ Sec', cloudy: '☁️ Nuageux', rain: '🌧️ Pluie', changing: '🌦️ Changeante', random: '🎲 Aléatoire' },
     // Probabilité de pluie par circuit (carrière et météo aléatoire)

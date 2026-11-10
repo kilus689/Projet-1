@@ -111,6 +111,13 @@
     normal: { label: 'Normal', skill: 0.93, quali: 1.015 },
     difficile: { label: 'Difficile', skill: 0.98, quali: 1.0 },
     expert: { label: 'Expert', skill: 1.02, quali: 0.99 },
+    // S'ajuste à votre niveau : plus forte quand vous gagnez, plus douce quand vous êtes loin
+    adaptatif: {
+      label: 'Adaptative',
+      adaptive: true,
+      get skill() { return 0.93 * (F1.Adapt ? F1.Adapt.level : 1); },
+      get quali() { return 1.015 - ((F1.Adapt ? F1.Adapt.level : 1) - 1) * 0.6; },
+    },
   };
 
   F1.RACE_LENGTHS = [

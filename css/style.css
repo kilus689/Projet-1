@@ -544,3 +544,17 @@ kbd {
 .challenge-line { font-weight: 700; }
 .challenge-line.ok { color: #3ddc84; }
 .challenge-line.ko { color: #ff8a7a; }
+
+/* Réglages des commandes tactiles : taille, côté inversé, inclinaison */
+#touch .touch-left { transform-origin: bottom left; }
+#touch .touch-right { transform-origin: bottom right; }
+body.touch-size-S #touch .touch-left, body.touch-size-S #touch .touch-right { transform: scale(0.62); }
+body.touch-size-M #touch .touch-left, body.touch-size-M #touch .touch-right { transform: scale(0.8); }
+body.touch-size-XL #touch .touch-left, body.touch-size-XL #touch .touch-right { transform: scale(1.15); }
+body.touch-swap #touch .touch-left { left: auto; right: 20px; transform-origin: bottom right; }
+body.touch-swap #touch .touch-right { right: auto; left: 20px; transform-origin: bottom left; flex-direction: row-reverse; }
+body.touch-tilt #touch .touch-left { display: none; }
+
+/* Duel */
+.duel-player input, .duel-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: inherit; font: inherit; font-size: 17px; margin-bottom: 8px; }
+.duel-select option { color: #111; }

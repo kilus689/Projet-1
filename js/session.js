@@ -83,6 +83,12 @@
     const rate = target === 0 || Math.sign(target) !== Math.sign(steerIn) ? sens.back : sens.rate;
     const d = target - steerIn;
     steerIn += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
+    // Direction par inclinaison de l'iPad (comme un volant)
+    if (set.steerMode === 'tilt' && tilt.ok) {
+      const v = tilt.raw - tilt.center;
+      const dz = 2.5, range = 24;
+      analog = Math.abs(v) < dz ? 0 : Math.max(-1, Math.min(1, Math.sign(v) * Math.pow((Math.abs(v) - dz) / range, 1.25)));
+    }
     let steer = analog != null ? analog : steerIn;
     // Moins de braquage à haute vitesse
     const p = S.race && S.race.player;
@@ -111,6 +117,41 @@
   });
   const isTouch = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   document.body.classList.toggle('touch-mode', isTouch);
+
+  // ---------- Inclinaison (accéléromètre) ----------
+  const tilt = { ok: false, raw: 0, center: 0 };
+  function onOrient(e) {
+    if (e.beta == null) return;
+    const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    // En paysage, pencher l'iPad à gauche/droite fait varier beta ; en portrait, gamma
+    tilt.raw = ang === 90 ? e.beta : ang === -90 || ang === 270 ? -e.beta : e.gamma;
+    tilt.ok = true;
+  }
+  F1.Tilt = {
+    // iOS demande l'autorisation après un geste de l'utilisateur
+    async enable() {
+      try {
+        if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const r = await DeviceOrientationEvent.requestPermission();
+          if (r !== 'granted') return false;
+        }
+        window.addEventListener('deviceorientation', onOrient);
+        return true;
+      } catch (e) { return false; }
+    },
+    recenter() { tilt.center = tilt.raw; },
+    get ok() { return tilt.ok; },
+  };
+  if (F1.Settings.get().steerMode === 'tilt' && !(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function')) F1.Tilt.enable();
+  // Taille et disposition des boutons tactiles
+  F1.applyTouchLayout = function () {
+    const set = F1.Settings.get();
+    const b = document.body;
+    for (const k of ['S', 'M', 'L', 'XL']) b.classList.toggle('touch-size-' + k, set.touchSize === k);
+    b.classList.toggle('touch-swap', !!set.touchSwap);
+    b.classList.toggle('touch-tilt', set.steerMode === 'tilt');
+  };
+  F1.applyTouchLayout();
 
   // ---------- Arrêts au stand (joueur) ----------
   function togglePit() {
@@ -242,11 +283,13 @@
     audio.init();
     S.opts = opts;
     S.attempts = [];
+    S.duelBest = null;
     S.demo = false;
     $('screen').classList.add('hidden');
     $('dialog').classList.add('hidden');
     $('hud').classList.remove('hidden');
     $('touch').classList.toggle('hidden', !isTouch);
+    F1.applyTouchLayout();
     newRun();
   }
 
@@ -254,12 +297,15 @@
     const o = S.opts;
     const track = F1.getTrack(o.gp);
     const set = F1.Settings.get();
-    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists, tyreWear: set.tyreWear, damage: set.damage, setup: set.setup, practice: o.practice, playerTyre: o.playerTyre });
+    S.race = new F1.Race({ track, entries: o.entries, laps: o.laps, mode: o.mode, weather: o.weather || 'dry', aeroMode: set.aero, assists: set.assists, tyreWear: set.tyreWear, damage: set.damage, setup: set.setup, practice: o.practice, adaptive: o.adaptive != null ? o.adaptive : set.difficulty === 'adaptatif', playerTyre: o.playerTyre });
     S.aeroWanted = false; S.prevAero = false; steerIn = 0;
+    // L'inclinaison actuelle devient la position « tout droit »
+    if (set.steerMode === 'tilt') F1.Tilt.recenter();
     S.replay = F1.Replay ? new F1.Replay(S.race.cars, track, 30) : null;
     S.maxDmg = 0; S.lastPos = 0; S.radioFlags = {};
     // Contre-la-montre : fantôme du meilleur tour enregistré sur ce circuit
-    S.ghost = o.timeTrial && F1.Ghost ? F1.Ghost.get(o.gp.id) : null;
+    // Duel : le fantôme est le meilleur tour de l'adversaire
+    S.ghost = o.ghostData || (o.timeTrial && F1.Ghost ? F1.Ghost.get(o.gp.id) : null);
     S.rec = []; S.recT = 0;
     S.race.ghost = null;
     S.challenge = null;
@@ -353,6 +399,7 @@
       const k = order.findIndex((o) => o.id === p.id);
       const me = order[k];
       F1.Records.race(S.opts.gp.id, k + 1, me.dnf);
+      if (race.adaptive && F1.Adapt) F1.Adapt.afterRace(k + 1, me.dnf);
       if (p.bestLap < Infinity) F1.Records.lap(S.opts.gp.id, p.bestLap, 'raceLap');
       if (S.challenge) {
         const ok = F1.Challenges.check(S.challenge, { pos: k + 1, grid: p.grid, dnf: me.dnf, fastest: race.bestLap.car === p, penalty: p.penalty, maxDmg: S.maxDmg || 0, stops: p.stops });
@@ -443,7 +490,7 @@
       btns.push(['Abandonner', 'danger', () => finish(o.allowRestart ? null : raceResult(true))]);
     } else {
       btns.push(['Recommencer le tour', '', () => newRun()]);
-      btns.push(['Terminer la séance', 'danger', () => finish({ time: bestAttempt() })]);
+      btns.push(['Terminer la séance', 'danger', () => finish({ time: bestAttempt(), ghost: S.duelBest })]);
     }
     dialog('Pause', null, btns);
   }
@@ -651,12 +698,12 @@
         const p = race.player;
         S.maxDmg = Math.max(S.maxDmg || 0, p.damaged || 0);
         // Contre-la-montre : enregistre le tour en cours et place le fantôme
-        if (S.opts && S.opts.timeTrial && p.wrap === 0 && !p.finished) {
+        if (S.opts && (S.opts.timeTrial || S.opts.duel) && p.wrap === 0 && !p.finished) {
           const lt = race.time - p.lapStart;
           while (S.rec.length <= lt / 0.05) S.rec.push([Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.round(p.a * 1000) / 1000]);
           const g = S.ghost ? F1.Ghost.at({ dt: 0.05, s: S.ghost.s }, lt) : null;
           race.ghost = g ? Object.assign(g, { team: p.team, num: p.num }) : null;
-        } else if (S.opts && S.opts.timeTrial) race.ghost = null;
+        } else if (S.opts && (S.opts.timeTrial || S.opts.duel)) race.ghost = null;
         if (race.mode === 'race' && S.state === 'run' && !p.finished && !p.out) radioChecks(race, p);
       }
     }
@@ -789,6 +836,7 @@
       const rec = F1.Records.lap(o.gp.id, time, 'lap');
       if (rec) toast('🏆 Nouveau record personnel sur ce circuit !', 'purple');
     }
+    if (o.duel && (!S.duelBest || time < S.duelBest.time) && S.rec.length > 20) S.duelBest = { time, s: S.rec };
     if (o.timeTrial && (!S.ghost || time < S.ghost.time) && S.rec.length > 20) {
       F1.Ghost.set(o.gp.id, { time, s: S.rec });
       S.ghost = { time, s: S.rec };
@@ -804,7 +852,7 @@
       (ref ? `<p class="subtitle">⏱ ${F1.Settings.poleText(o.gp)}<br>Écart avec la pole réelle : <b>${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(3)} s</b></p>` : '');
     const btns = [];
     if (S.attempts.length < (o.maxAttempts || 3)) btns.push([`Nouvelle tentative (${S.attempts.length}/${o.maxAttempts || 3})`, '', () => newRun()]);
-    btns.push(['Valider ce temps', 'primary', () => finish({ time: best })]);
+    btns.push(['Valider ce temps', 'primary', () => finish({ time: best, ghost: S.duelBest })]);
     dialog('Tour terminé', body, btns);
   }
 

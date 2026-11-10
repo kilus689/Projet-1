@@ -37,6 +37,18 @@
     },
   };
 
+  // ---------- Difficulté adaptative ----------
+  F1.Adapt = {
+    get level() { const v = parseFloat(localStorage.getItem('paddock-adapt')); return v > 0 ? v : 1; },
+    set level(v) { try { localStorage.setItem('paddock-adapt', String(Math.max(0.9, Math.min(1.1, v)))); } catch (e) { /* ignoré */ } },
+    // Après chaque course : on rapproche les IA de votre niveau
+    afterRace(pos, dnf) {
+      const d = dnf ? -0.01 : pos <= 2 ? 0.015 : pos <= 5 ? 0.006 : pos >= 14 ? -0.015 : pos >= 10 ? -0.006 : 0;
+      this.level = this.level + d;
+    },
+    label() { return Math.round(this.level * 100) + ' %'; },
+  };
+
   // ---------- Défis du week-end ----------
   F1.Challenges = {
     LIST: {

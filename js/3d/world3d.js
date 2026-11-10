@@ -8,6 +8,8 @@
   const G = X.geo;
 
   const NIGHT = new Set(['sg-2008', 'us-2023', 'bh-2002', 'sa-2021', 'qa-2004', 'ae-2009']);
+  // Circuits au bord de la mer (port de Monaco, Caspienne, mer Rouge, golfe Persique, baie de Marina)
+  const COASTAL = new Set(['mc-1929', 'az-2016', 'sa-2021', 'ae-2009', 'sg-2008']);
   const TROPICAL = new Set(['us-2022', 'sg-2008', 'br-1940', 'mx-1962', 'ae-2009', 'qa-2004', 'bh-2002', 'sa-2021', 'au-1953']);
   X.isNight = (id) => NIGHT.has(id);
 
@@ -138,6 +140,16 @@
       t = t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
       return (hMin - 2) * (1 - t) + dem * t;
     };
+  }
+
+  // Valeur brute du relief (mètres, 0 = niveau de la mer) en un point du jeu
+  function demAt3(track, x, z) {
+    const E = track.dem;
+    const ux = track.unscale(x), uz = track.unscale(z);
+    let fx = (ux - E.ox) / E.sp, fy = (uz - E.oy) / E.sp;
+    if (fx < 0 || fy < 0 || fx > E.nx - 1.001 || fy > E.ny - 1.001) return 99;
+    const ix = Math.floor(fx), iy = Math.floor(fy);
+    return E.v[iy * E.nx + ix];
   }
 
   // ---------- Construction ----------
@@ -531,7 +543,31 @@
           }
         }
       }
-      const cap = quality === 'low' ? 600 : quality === 'medium' ? 2500 : 6000;
+      // Forêts propres à certains circuits : Ardennes très boisées à Spa, parc de Monza
+      const FOREST = { 'be-1925': { kind: 'conifer', dens: 0.6 }, 'it-1922': { kind: 'tree', dens: 0.55 } }[id];
+      if (FOREST) {
+        const cs = 100, inner = new Set(), outer = new Set();
+        const key = (i, j) => i * 100003 + j;
+        const stamp = (set, x, y, rad) => {
+          const ci = Math.floor(x / cs), cj = Math.floor(y / cs), R = Math.ceil(rad / cs);
+          for (let a = -R; a <= R; a++) for (let c = -R; c <= R; c++) if (a * a + c * c <= R * R) set.add(key(ci + a, cj + c));
+        };
+        for (let i = 0; i < N; i += 3) stamp(inner, track.pts[i].x, track.pts[i].y, half + run + 260);
+        for (let i = 0; i < N; i += 12) stamp(outer, track.pts[i].x, track.pts[i].y, 1600);
+        if (track.pit) for (let i = 0; i < N; i += 3) { const l = track.pitLat(i); if (l) { const p = track.pts[i]; stamp(inner, p.x + p.nx * l, p.y + p.ny * l, 450); } }
+        const extra = [];
+        const maxN = quality === 'low' ? 700 : quality === 'medium' ? 2600 : 5000;
+        const cand = [];
+        for (const k of outer) if (!inner.has(k)) cand.push(k);
+        const keep = Math.min(FOREST.dens, maxN / Math.max(1, cand.length));
+        for (const k of cand) {
+          if (rnd() > keep) continue;
+          const ci = Math.round(k / 100003), cj = k - ci * 100003;
+          extra.push({ x: (ci + rnd()) * cs, y: (cj + rnd()) * cs, r: 20 + rnd() * 18, rot: rnd() * 6.28 });
+        }
+        (FOREST.kind === 'conifer' ? conifers : trees).push(...extra);
+      }
+      const cap = quality === 'low' ? 1000 : quality === 'medium' ? 4000 : 9000;
       for (const arr of [trees, conifers, palms]) if (arr.length > cap) arr.length = cap;
       const leaf = std({ color: 0xffffff, roughness: 0.95, flatShading: true });
       const bark = std({ color: 0x5a4128 });
@@ -576,6 +612,44 @@
         col.set(d.c);
         return true;
       }, { cast: true });
+    }
+
+    // ---------- Mer et bateaux (circuits au bord de l'eau, d'après les données d'altitude) ----------
+    if (track.dem) {
+      const E = track.dem;
+      let seaCells = 0;
+      for (let k = 0; k < E.v.length; k += 7) if (E.v[k] <= 0.5) seaCells++;
+      if (COASTAL.has(id) && seaCells > E.v.length / 7 * 0.03) {
+        const seaY = (track.meanH + (0 - track.meanH) * track.reliefScale) * 10 + 3;
+        // Plan d'eau limité à la zone couverte par les données d'altitude
+        const sf = track.sf || 1, gx = (u) => 3000 + (u - 3000) * sf;
+        const wx0 = gx(E.ox), wz0 = gx(E.oy), wx1 = gx(E.ox + (E.nx - 1) * E.sp), wz1 = gx(E.oy + (E.ny - 1) * E.sp);
+        const water = add(new T.PlaneGeometry(wx1 - wx0, wz1 - wz0), new T.MeshPhysicalMaterial({ color: night ? 0x0b2233 : 0x1e5a78, roughness: 0.12, metalness: 0.15, clearcoat: 0.6, transparent: true, opacity: 0.94 }), true, false);
+        water.rotation.x = -Math.PI / 2;
+        water.position.set((wx0 + wx1) / 2, seaY, (wz0 + wz1) / 2);
+        // Yachts amarrés près de la piste (formes génériques)
+        if (quality !== 'low') {
+          const boats = [];
+          let r2 = 7;
+          const rnd2 = () => { r2 = (r2 * 16807) % 2147483647; return r2 / 2147483647; };
+          for (let x = b.minX - 1500; x < b.maxX + 1500; x += 110) for (let z = b.minY - 1500; z < b.maxY + 1500; z += 70) {
+            const v = demAt3(track, x, z);
+            if (v > 0.3) continue;
+            const d = Math.abs(track.distTo(x, z));
+            if (d < half + run + 120 || d > 1400 || rnd2() > 0.35) continue;
+            if (groundY(x, z) > seaY - 1) continue;
+            boats.push({ x, y: z, L: 120 + rnd2() * 260, rot: rnd2() < 0.8 ? 0 : Math.PI / 2 });
+          }
+          if (boats.length > 160) boats.length = 160;
+          const hull = G.merge([
+            G.at(new T.BoxGeometry(1, 0.16, 0.24), 0, 0.08, 0),
+            G.at(new T.ConeGeometry(0.12, 0.25, 4), 0.62, 0.1, 0, 0, 0, -Math.PI / 2, [1, 1, 0.9]),
+          ]);
+          const cabin = G.merge([G.at(new T.BoxGeometry(0.5, 0.12, 0.18), -0.08, 0.22, 0), G.at(new T.BoxGeometry(0.3, 0.1, 0.14), -0.1, 0.33, 0)]);
+          instanced(s, hull, std({ color: 0xf4f4f2, roughness: 0.35 }), boats, (d, P, S, E2) => { P.set(d.x, seaY - 2, d.y); S.setScalar(d.L); E2.y = d.rot; }, { cast: true });
+          instanced(s, cabin, std({ color: 0x2a3440, roughness: 0.2, metalness: 0.4 }), boats, (d, P, S, E2) => { P.set(d.x, seaY - 2, d.y); S.setScalar(d.L); E2.y = d.rot; });
+        }
+      }
     }
 
     // Trajectoire idéale (affichée seulement si l'aide est activée)

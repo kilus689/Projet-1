@@ -1,7 +1,7 @@
 'use strict';
 // Service worker : permet de jouer hors ligne une fois l'application installée.
 // Changer VERSION à chaque mise à jour pour forcer le rechargement des fichiers.
-const VERSION = 'paddock-v27';
+const VERSION = 'paddock-v28';
 const FILES = [
   './',
   './index.html',
