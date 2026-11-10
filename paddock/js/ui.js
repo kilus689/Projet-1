@@ -157,6 +157,9 @@
     items.push(h('button', { class: 'home-btn', onclick: timeTrial },
       h('span', { class: 'hb-title' }, 'Contre-la-montre'),
       h('span', { class: 'hb-sub' }, 'Seul en piste contre votre fantôme')));
+    items.push(h('button', { class: 'home-btn', onclick: duelSetup },
+      h('span', { class: 'hb-title' }, 'Duel à deux'),
+      h('span', { class: 'hb-sub' }, 'Chacun son tour sur le même iPad, contre le fantôme de l\'autre')));
     items.push(h('button', { class: 'home-btn', onclick: recordsScreen },
       h('span', { class: 'hb-title' }, 'Records et défis'),
       h('span', { class: 'hb-sub' }, 'Meilleurs tours, victoires et défis réussis')));
@@ -240,6 +243,68 @@
     });
   }
 
+  // ---------- Duel à deux joueurs (chacun son tour) ----------
+  const duelCfg = Object.assign({ p1: 'Joueur 1', p2: 'Joueur 2', t1: 'ferrari', t2: 'mclaren', gp: 'mc-1929', tries: 2 }, store.get('duel', {}));
+  function duelSetup() {
+    const sel = (opts, cur, on) => {
+      const s = h('select', { class: 'duel-select', onchange: (e) => on(e.target.value) });
+      for (const [v, label] of opts) { const o = h('option', { value: v }, label); if (v === cur) o.selected = true; s.appendChild(o); }
+      return s;
+    };
+    const teams = F1.TEAMS2026.map((t) => [t.id, t.name]);
+    const player = (k) => h('section', { class: 'duel-player' },
+      h('h3', null, `Joueur ${k}`),
+      h('input', { type: 'text', maxlength: '16', value: duelCfg['p' + k], oninput: (e) => { duelCfg['p' + k] = e.target.value || `Joueur ${k}`; } }),
+      sel(teams, duelCfg['t' + k], (v) => { duelCfg['t' + k] = v; }));
+    show(card('Duel à deux', backBtn(home),
+      h('p', { class: 'hint' }, "Le joueur 1 roule d'abord. Le joueur 2 roule ensuite avec le fantôme du meilleur tour du joueur 1. Le meilleur temps gagne."),
+      h('div', { class: 'row' }, player(1), player(2)),
+      h('div', { class: 'row' },
+        h('section', null, h('h3', null, 'Circuit'), sel(F1.CALENDAR.map((g) => [g.id, `${g.flag} ${g.gp.replace('Grand Prix ', '')}`]), duelCfg.gp, (v) => { duelCfg.gp = v; })),
+        h('section', null, h('h3', null, 'Tentatives par joueur'), seg([[1, '1'], [2, '2'], [3, '3']], duelCfg.tries, (v) => { duelCfg.tries = v; store.set('duel', duelCfg); duelSetup(); }))),
+      h('button', { class: 'primary big', onclick: () => { store.set('duel', duelCfg); duelRun(1, null); } }, 'Commencer le duel')));
+  }
+  function duelEntries(k) {
+    const c = quickCareer();
+    const team = teamById(duelCfg['t' + k]);
+    const d = F1.DRIVERS2026.find((x) => x.team === team.id);
+    c.playerDriver = d.id;
+    const e = C.entries(c, [d.id], d.id);
+    e[0].name = duelCfg['p' + k];
+    return e;
+  }
+  function duelRun(k, first) {
+    const gp = F1.CALENDAR.find((g) => g.id === duelCfg.gp);
+    const name = duelCfg['p' + k];
+    const go = () => F1.Session.start({
+      gp, mode: 'quali', entries: duelEntries(k), maxAttempts: duelCfg.tries, weather: 'dry', duel: true,
+      ghostData: first && first.ghost ? first.ghost : null,
+      title: `Duel · ${name}`, qLabel: `${name} · tour lancé`,
+      onEnd: (res) => {
+        const r = { name, time: res && res.time != null ? res.time : null, ghost: res && res.ghost };
+        if (k === 1) duelRun(2, r); else duelResult(first, r);
+      },
+    });
+    show(card(`Au tour de ${name}`,
+      h('p', { class: 'big-time' }, `🏎️ ${name}`),
+      first ? h('p', { class: 'subtitle' }, `Temps à battre : ${first.time ? fmt(first.time) : 'aucun'} (${first.name}). Son fantôme roule avec vous.`) : h('p', { class: 'subtitle' }, `${duelCfg.tries} tentative(s). Passez l'iPad à ${name} !`),
+      h('button', { class: 'primary big', onclick: go }, 'Je suis prêt')));
+  }
+  function duelResult(a, b) {
+    const ta = a.time || Infinity, tb = b.time || Infinity;
+    const win = ta === tb ? null : ta < tb ? a : b;
+    show(card('Résultat du duel',
+      h('p', { class: 'big-time' }, win ? `🏆 ${win.name}` : 'Égalité !'),
+      h('div', { class: 'table-wrap' }, h('table', { class: 'results-table' },
+        h('tbody', null,
+          h('tr', { class: win === a ? 'me' : '' }, h('td', null, a.name), h('td', null, a.time ? fmt(a.time) : 'sans temps')),
+          h('tr', { class: win === b ? 'me' : '' }, h('td', null, b.name), h('td', null, b.time ? fmt(b.time) : 'sans temps'))))),
+      win && isFinite(ta) && isFinite(tb) ? h('p', { class: 'subtitle' }, `Écart : ${Math.abs(ta - tb).toFixed(3)} s`) : null,
+      h('button', { class: 'primary big', onclick: () => duelRun(1, null) }, 'Revanche'),
+      h('button', { onclick: duelSetup }, 'Changer les réglages'),
+      h('button', { onclick: home }, 'Menu principal')));
+  }
+
   // ---------- Records et défis ----------
   function recordsScreen() {
     const R = F1.Records.all(), T = F1.Records.totals(), D = F1.Challenges.done();
@@ -321,7 +386,8 @@
       parts.push(h('section', null, h('h3', null, 'Météo'), seg(Object.entries(S.WEATHER_CHOICES), st.weather, (v) => { S.set({ weather: v }); rerender(); })));
     }
     if (opts && opts.difficulty) {
-      parts.push(h('section', null, h('h3', null, 'Difficulté de l\'IA'), seg(Object.entries(F1.DIFFICULTIES).map(([k, v]) => [k, v.label]), st.difficulty, (v) => { S.set({ difficulty: v }); rerender(); })));
+      parts.push(h('section', null, h('h3', null, 'Difficulté de l\'IA'), seg(Object.entries(F1.DIFFICULTIES).map(([k, v]) => [k, v.label]), st.difficulty, (v) => { S.set({ difficulty: v }); rerender(); }),
+        st.difficulty === 'adaptatif' ? h('p', { class: 'hint' }, `Niveau actuel des IA : ${F1.Adapt.label()} (100 % = Normal). Il monte quand vous gagnez et baisse quand vous êtes loin, après chaque course et un peu pendant la course.`) : null));
     }
     parts.push(h('section', null, h('h3', null, 'Aides au pilotage'),
       h('div', { class: 'toggles' },
@@ -338,6 +404,15 @@
       h('section', null, h('h3', null, 'Dégâts'), seg(Object.entries(S.DAMAGE), st.damage, (v) => { S.set({ damage: v }); rerender(); }),
         h('p', { class: 'hint' }, "Toucher un mur ou une autre voiture abîme l'aileron avant, l'aileron arrière ou la suspension : la voiture tourne moins bien et va moins vite. Les ailerons sont changés à l'arrêt au stand (quelques secondes de plus), la suspension non.")),
       h('section', null, h('h3', null, 'Pneus de départ'), seg([['S', '🔴 Tendres'], ['M', '🟡 Médiums'], ['H', '⚪ Durs']], st.startTyre, (v) => { S.set({ startTyre: v }); rerender(); }))));
+    parts.push(h('section', null, h('h3', null, 'Commandes tactiles (iPad / iPhone)'),
+      h('div', { class: 'row' },
+        h('section', null, h('h3', null, 'Direction'), seg(Object.entries(S.STEER_MODES), st.steerMode, async (v) => {
+          if (v === 'tilt' && !(await F1.Tilt.enable())) { alert("L'inclinaison n'est pas disponible : autorisez l'accès aux mouvements de l'appareil."); return; }
+          S.set({ steerMode: v }); F1.applyTouchLayout(); rerender();
+        })),
+        h('section', null, h('h3', null, 'Taille des boutons'), seg(Object.entries(S.TOUCH_SIZES), st.touchSize, (v) => { S.set({ touchSize: v }); F1.applyTouchLayout(); rerender(); })),
+        h('section', null, h('h3', null, 'Disposition'), seg([[false, 'Direction à gauche'], [true, 'Pédales à gauche']], !!st.touchSwap, (v) => { S.set({ touchSwap: v }); F1.applyTouchLayout(); rerender(); }))),
+      h('p', { class: 'hint' }, "Inclinaison : tenez l'iPad comme un volant ; la position au départ de chaque séance sert de « tout droit ». Les boutons ◀ ▶ disparaissent.")));
     parts.push(h('section', null, h('h3', null, "Radio de l'ingénieur"), seg(Object.entries(S.RADIO), st.radio, (v) => { S.set({ radio: v }); rerender(); }),
       h('p', { class: 'hint' }, 'Écarts, pneus, météo, drapeaux et dégâts annoncés pendant la course (voix française de votre appareil).')));
     parts.push(h('p', { class: 'hint' }, 'Arrêts au stand : bouton STAND / touche B pour rentrer au prochain passage, puis choix de la gomme (T, M, D, I ou touches 1 à 4). Usure calculée sur la distance de la course : une course courte demande quand même un arrêt. Sous la pluie, il faut des pneus intermédiaires (I).'));
@@ -880,7 +955,7 @@
     const gp = C.gp(c);
     F1.Session.start({
       gp, mode: 'race', laps: sprintPlayed(c, gp), entries: C.entries(c, c.weekend.squali.order, c.playerDriver), title: `Sprint · ${gp.gp}`, weather: weatherFor(c), playerTyre: F1.Settings.get().startTyre,
-      practice: !!c.weekend.practice,
+      practice: !!c.weekend.practice, adaptive: c.difficulty === 'adaptatif',
       onEnd: (res) => endSprint(c, res),
     });
   }
@@ -925,7 +1000,7 @@
     const grid = c.weekend.quali.order;
     F1.Session.start({
       gp, mode: 'race', laps: C.lapsFor(c, gp), entries: C.entries(c, grid, c.playerDriver), title: gp.gp, weather: weatherFor(c), playerTyre: F1.Settings.get().startTyre,
-      practice: !!c.weekend.practice,
+      practice: !!c.weekend.practice, adaptive: c.difficulty === 'adaptatif',
       onEnd: (res) => finishRace(c, gp, res),
     });
   }

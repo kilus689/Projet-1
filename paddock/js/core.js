@@ -910,7 +910,7 @@
   // ---------- Course / qualification jouée ----------
   // entries : [{ id, name, code, num, team, isPlayer, skill, power }] dans l'ordre de la grille
   class Race {
-    constructor({ track, entries, laps, mode, weather, aeroMode, assists, tyreWear, playerTyre, damage, setup, practice }) {
+    constructor({ track, entries, laps, mode, weather, aeroMode, assists, tyreWear, playerTyre, damage, setup, practice, adaptive }) {
       this.track = track;
       // Météo changeante : la pluie arrive en cours de course puis la piste sèche
       this.wetPlan = null;
@@ -926,6 +926,8 @@
       this.aeroMode = aeroMode || 'auto';
       this.assists = assists || {};
       this.pitManual = !this.assists.autoPit;
+      this.adaptive = !!adaptive;
+      this.adapt = 1; this.adaptT = 0;
       this.mode = mode || 'race';
       this.laps = this.mode === 'quali' ? 1 : laps;
       this.time = 0;
@@ -982,7 +984,7 @@
     step(dt, playerInput) {
       const tr = this.track;
       if (this.started) this.time += dt;
-      if (this.started) { this.updateWeather(dt); this.updateTow(); }
+      if (this.started) { this.updateWeather(dt); this.updateTow(); if (this.adaptive) this.rubberBand(dt); }
       this.playerInput = playerInput;
       for (const car of this.cars) {
         let inp;
@@ -1035,6 +1037,27 @@
       for (const k of ['grip', 'brake', 'accel', 'steer', 'ai']) this.cond[k] = D[k] + (R[k] - D[k]) * w;
       const wx = w > 0.45 ? 'rain' : W ? 'cloudy' : this.baseWeather;
       if (wx !== this.weather) { this.weather = wx; this.events.push({ type: 'weather', msg: wx }); }
+    }
+
+    // ---------- Difficulté adaptative en course : les IA s'ajustent doucement à votre rythme ----------
+    rubberBand(dt) {
+      const p = this.player;
+      if (!p || this.mode !== 'race' || p.finished) return;
+      this.adaptT += dt;
+      if (this.adaptT < 2) return;
+      this.adaptT = 0;
+      const st = this.standings(), pos = st.indexOf(p) + 1;
+      const lead = pos === 1 && st[1] ? (st[1].gap - p.gap) : 0;
+      let d = 0;
+      if (pos === 1 && lead > 2) d = 0.004;
+      else if (pos > Math.max(6, st.length * 0.4)) d = -0.004;
+      else if (pos <= 3) d = 0.0015;
+      this.adapt = Math.max(0.95, Math.min(1.04, this.adapt + d));
+      for (const c of this.cars) {
+        if (c.isPlayer) continue;
+        if (c.baseSkill == null) c.baseSkill = c.skill;
+        c.skill = c.baseSkill * this.adapt;
+      }
     }
 
     // ---------- Aspiration ----------
